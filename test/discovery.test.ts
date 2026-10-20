@@ -17,7 +17,11 @@ test('discovery parses TOML, supports explicit nested roots, deduplicates and do
     assert.equal((await discovery.discover([{ root, configured: [] }])).projects.length, 0);
     const found = await discovery.discover([{ root, configured: ['中文 child', './中文 child'] }]);
     assert.equal(found.projects.length, 1); assert.equal(found.issues.length, 0);
-    assert.equal(discovery.containing(found.projects, path.join(nested, 'logic.py'))?.id, found.projects[0]?.id);
+    await writeFile(path.join(nested, 'logic.py'), 'pass\n');
+    for (const filename of ['logic.py', 'not-yet-written.py']) {
+      assert.equal(discovery.containing(found.projects, path.join(nested, filename))?.id, found.projects[0]?.id,
+        JSON.stringify({ root, project: found.projects[0], filename }));
+    }
     assert.equal(discovery.containing(found.projects, `${nested}-other/logic.py`), undefined);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

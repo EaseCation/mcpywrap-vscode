@@ -5,6 +5,21 @@ import { parse } from 'smol-toml';
 import { ProjectDiscovery } from '../../application/ports';
 import { Project } from '../../domain/model';
 
+function canonicalPath(file: string): string {
+  // Use the same native resolver for roots and documents. Windows may expose
+  // a temp directory through both its 8.3 alias and its long path.
+  let existing = path.resolve(file);
+  const suffix: string[] = [];
+  while (true) {
+    try { return path.join(realpathSync.native(existing), ...suffix); }
+    catch {
+      const parent = path.dirname(existing);
+      if (parent === existing) return path.resolve(file);
+      suffix.unshift(path.basename(existing)); existing = parent;
+    }
+  }
+}
+
 export class FilesystemDiscovery implements ProjectDiscovery {
   async discover(roots: readonly { root: string; configured: readonly string[] }[]) {
     const projects = new Map<string, Project>();
@@ -13,7 +28,7 @@ export class FilesystemDiscovery implements ProjectDiscovery {
       const explicit = workspace.configured.length > 0;
       for (const configured of explicit ? workspace.configured : ['.']) {
         try {
-          const root = await realpath(path.resolve(workspace.root, configured));
+          const root = canonicalPath(await realpath(path.resolve(workspace.root, configured)));
           const manifest = path.join(root, 'pyproject.toml');
           if (!explicit) {
             const data = parse(await readFile(manifest, 'utf8'));
@@ -33,19 +48,11 @@ export class FilesystemDiscovery implements ProjectDiscovery {
   }
   containing(projects: readonly Project[], file: string): Project | undefined {
     // Resolve aliases such as macOS /var -> /private/var, including new files.
-    let existing = path.resolve(file);
-    const suffix: string[] = [];
-    while (true) {
-      try { file = path.join(realpathSync(existing), ...suffix); break; }
-      catch {
-        const parent = path.dirname(existing);
-        if (parent === existing) { file = path.resolve(file); break; }
-        suffix.unshift(path.basename(existing)); existing = parent;
-      }
-    }
-    return [...projects].sort((a, b) => b.root.length - a.root.length).find(project => {
-      const relative = path.relative(project.root, file);
+    file = canonicalPath(file);
+    return projects.map(project => ({ project, root: canonicalPath(project.root) }))
+      .sort((a, b) => b.root.length - a.root.length).find(({ root }) => {
+      const relative = path.relative(root, file);
       return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
-    });
+    })?.project;
   }
 }

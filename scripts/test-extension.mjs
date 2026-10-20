@@ -1,4 +1,4 @@
-import { runTests } from '@vscode/test-electron';
+import { downloadAndUnzipVSCode, runTests } from '@vscode/test-electron';
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
@@ -27,9 +27,21 @@ try {
     'mcpy.queryTimeoutSeconds': 5
   }));
   const log = path.join(temporary, 'cli.jsonl');
+  const version = process.env.VSCODE_TEST_VERSION ?? 'stable';
+  let vscodeExecutablePath = process.env.VSCODE_EXECUTABLE_PATH;
+  if (!vscodeExecutablePath) {
+    vscodeExecutablePath = await downloadAndUnzipVSCode({ version });
+    if (process.platform === 'darwin') {
+      // New Code bundles renamed Electron to Code. Read the bundle metadata
+      // instead of relying on the test helper's historical executable name.
+      const plist = path.join(path.dirname(path.dirname(vscodeExecutablePath)), 'Info.plist');
+      const binary = execFileSync('/usr/bin/plutil', ['-extract', 'CFBundleExecutable', 'raw', '-o', '-', plist], { encoding: 'utf8' }).trim();
+      vscodeExecutablePath = path.join(path.dirname(vscodeExecutablePath), binary);
+    }
+  }
   await runTests({
-    version: process.env.VSCODE_TEST_VERSION ?? 'stable',
-    vscodeExecutablePath: process.env.VSCODE_EXECUTABLE_PATH,
+    version,
+    vscodeExecutablePath,
     extensionDevelopmentPath: root,
     extensionTestsPath: path.join(root, '.test-build/test/extension/index.js'),
     extensionTestsEnv: { MCPY_FIXTURE_LOG: log, MCPY_FIXTURE_WORKSPACE: workspace },
