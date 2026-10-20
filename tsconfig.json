@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "CommonJS", "moduleResolution": "Node",
+    "lib": ["ES2022"], "types": ["node", "vscode"],
+    "strict": true, "noUncheckedIndexedAccess": true, "noUnusedLocals": true,
+    "noUnusedParameters": true, "esModuleInterop": true, "skipLibCheck": true,
+    "rootDir": ".", "outDir": ".test-build", "sourceMap": true
+  },
+  "include": ["src/**/*.ts"], "exclude": ["node_modules", ".test-build"]
+}

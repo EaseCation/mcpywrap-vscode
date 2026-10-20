@@ -1,0 +1,215 @@
+{
+  "name": "mcpywrap-vscode",
+  "displayName": "mcpywrap — 游戏测试工作区",
+  "description": "在 VS Code 中通过 mcpy CLI 管理 Minecraft 中国版测试会话、执行 Python 与热更模块。",
+  "version": "0.1.0",
+  "publisher": "easecation",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EaseCation/mcpywrap-vscode.git"
+  },
+  "homepage": "https://github.com/EaseCation/mcpywrap-vscode#readme",
+  "bugs": {
+    "url": "https://github.com/EaseCation/mcpywrap-vscode/issues"
+  },
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.95.0",
+    "node": ">=22"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "workspaceContains:pyproject.toml"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "mcpy 可以执行项目脚本；仅在受信任的工作区启用。"
+    },
+    "virtualWorkspaces": {
+      "supported": false
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "mcpy.refresh",
+        "title": "mcpy: 刷新测试工作区",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "mcpy.run",
+        "title": "mcpy: 运行测试",
+        "icon": "$(play)"
+      },
+      {
+        "command": "mcpy.newWorld",
+        "title": "mcpy: 新建测试世界"
+      },
+      {
+        "command": "mcpy.runTwoClients",
+        "title": "mcpy: 运行双客户端测试"
+      },
+      {
+        "command": "mcpy.stop",
+        "title": "mcpy: 停止所选会话或联调组",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "mcpy.logs",
+        "title": "mcpy: 查看日志快照",
+        "icon": "$(output)"
+      },
+      {
+        "command": "mcpy.selectTarget",
+        "title": "mcpy: 选择执行目标"
+      },
+      {
+        "command": "mcpy.executeSelection",
+        "title": "mcpy: 在游戏中执行 Python 选区"
+      },
+      {
+        "command": "mcpy.reloadFile",
+        "title": "mcpy: 热更当前 Python 模块"
+      },
+      {
+        "command": "mcpy.doctor",
+        "title": "mcpy: 检查运行环境"
+      },
+      {
+        "command": "mcpy.configure",
+        "title": "mcpy: 配置 CLI 路径"
+      }
+    ],
+    "configuration": {
+      "title": "mcpywrap",
+      "properties": {
+        "mcpy.executable": {
+          "type": "string",
+          "default": "mcpy",
+          "scope": "machine-overridable",
+          "description": "mcpy 可执行文件的名称或绝对路径。填写可执行文件路径，不填写 shell 命令。"
+        },
+        "mcpy.projectRoots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource",
+          "description": "相对于工作区根目录的项目目录。默认发现工作区根目录中声明了 tool.mcpywrap 的 pyproject.toml。"
+        },
+        "mcpy.queryTimeoutSeconds": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 300,
+          "scope": "resource",
+          "description": "只读 CLI 查询超时。"
+        },
+        "mcpy.operationTimeoutSeconds": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 10,
+          "maximum": 3600,
+          "scope": "resource",
+          "description": "启动、停止、执行和热更的等待上限；超时后需要查询结果。"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mcpy",
+          "title": "游戏测试",
+          "icon": "media/game.svg"
+        }
+      ]
+    },
+    "views": {
+      "mcpy": [
+        {
+          "id": "mcpy.sessions",
+          "name": "测试工作区"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "mcpy.sessions",
+        "contents": "打开含 [tool.mcpywrap] 的项目，或在设置中添加 mcpy.projectRoots。\n[配置 CLI](command:mcpy.configure)\n[刷新](command:mcpy.refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "mcpy.run",
+          "when": "view == mcpy.sessions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mcpy.refresh",
+          "when": "view == mcpy.sessions",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "mcpy.run",
+          "when": "view == mcpy.sessions && viewItem =~ /^mcpy\\.(project|world)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "mcpy.logs",
+          "when": "view == mcpy.sessions && viewItem =~ /^mcpy\\.(session|group)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "mcpy.stop",
+          "when": "view == mcpy.sessions && viewItem =~ /^mcpy\\.(session|group)$/",
+          "group": "inline@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "mcpy.executeSelection",
+          "when": "editorLangId == python && editorHasSelection && isWorkspaceTrusted",
+          "group": "mcpy@1"
+        },
+        {
+          "command": "mcpy.reloadFile",
+          "when": "editorLangId == python && resourceScheme == file && isWorkspaceTrusted",
+          "group": "mcpy@2"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test .test-build/test/*.test.js",
+    "check:architecture": "node scripts/check-architecture.mjs",
+    "check": "npm run typecheck && npm run check:architecture && npm test && npm run build",
+    "vscode:prepublish": "npm run check",
+    "package": "vsce package",
+    "test:extension": "node scripts/test-extension.mjs"
+  },
+  "dependencies": {
+    "smol-toml": "^1.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.95.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.0"
+  }
+}

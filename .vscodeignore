@@ -1,0 +1,15 @@
+.git/**
+.github/**
+.vscode/**
+.local-notes/**
+.test-build/**
+.vscode-test/**
+src/**
+test/**
+scripts/**
+node_modules/**
+tsconfig*.json
+package-lock.json
+AGENTS.md
+docs/**
+README.md

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.test-build/
+.vscode-test/
+*.vsix
+.local-notes/
+.DS_Store
