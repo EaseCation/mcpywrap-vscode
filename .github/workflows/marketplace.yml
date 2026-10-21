@@ -81,6 +81,8 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.publish))
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      MARKETPLACE_AUTH: ${{ vars.MARKETPLACE_AUTH || 'oidc' }}
     environment:
       name: marketplace
       url: https://marketplace.visualstudio.com/items?itemName=easecation.mcpywrap-vscode
@@ -107,7 +109,25 @@ jobs:
           VSIX_PATH: release-package/${{ needs.release.outputs.file }}
           RELEASE_VERSION: ${{ needs.release.outputs.version }}
         run: node scripts/marketplace-release.mjs package
-      - name: Publish the checked package (OIDC only, no credential fallback)
+      - name: Validate explicit authentication mode
+        run: |
+          case "$MARKETPLACE_AUTH" in
+            oidc|pat) ;;
+            *) echo "MARKETPLACE_AUTH must be oidc or pat" >&2; exit 1 ;;
+          esac
+      - name: Publish with OIDC (no credential fallback)
+        if: env.MARKETPLACE_AUTH == 'oidc'
         env:
           VSIX_PATH: release-package/${{ needs.release.outputs.file }}
         run: npx --no-install vsce publish --oidc --packagePath "$VSIX_PATH"
+      - name: Publish with explicitly configured Marketplace PAT
+        if: env.MARKETPLACE_AUTH == 'pat'
+        env:
+          VSIX_PATH: release-package/${{ needs.release.outputs.file }}
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "Configure VSCE_PAT in the marketplace environment; no fallback will be attempted." >&2
+            exit 1
+          fi
+          npx --no-install vsce publish --packagePath "$VSIX_PATH"
