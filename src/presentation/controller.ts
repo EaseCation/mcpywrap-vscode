@@ -62,7 +62,10 @@ export class WorkbenchController implements vscode.Disposable {
       vscode.commands.executeCommand('workbench.action.openSettings', 'mcpy.executable')));
     this.disposables.push(vscode.window.onDidChangeActiveTextEditor(() => this.updateEditorContext()));
     this.disposables.push(vscode.workspace.onDidOpenTextDocument(() => this.updateEditorContext()),
-      vscode.workspace.onDidCloseTextDocument(() => this.updateEditorContext()));
+      vscode.workspace.onDidCloseTextDocument(document => { this.fileProjects.delete(document.uri.toString()); this.updateEditorContext(); }),
+      vscode.workspace.onDidSaveTextDocument(document => {
+        if (document.uri.path.endsWith('/pyproject.toml')) this.onManifestChange(document.uri);
+      }));
     this.disposables.push(vscode.workspace.onDidChangeWorkspaceFolders(() => this.invalidateProjects()));
     this.disposables.push(vscode.workspace.onDidChangeConfiguration(event => {
       if (event.affectsConfiguration('mcpy')) this.invalidateProjects();
@@ -75,15 +78,18 @@ export class WorkbenchController implements vscode.Disposable {
     // VS Code may coalesce a removed directory into a single delete event,
     // without reporting its pyproject.toml. Observe deletes only, then compare
     // against cached project paths; do not react to ordinary file writes.
-    const removals = vscode.workspace.createFileSystemWatcher('**', true, true, false);
-    this.disposables.push(removals, removals.onDidDelete(uri => {
+    const directories = vscode.workspace.createFileSystemWatcher('**', false, true, false);
+    this.disposables.push(directories, directories.onDidDelete(uri => {
       const removed = uri.path.toLowerCase().replace(/\/$/, '');
       if (this.projects.some(project => [project.root, project.workspaceRoot].some(directory => {
         if (!directory) return false;
         const root = vscode.Uri.file(directory).path.toLowerCase();
         return root === removed || root.startsWith(`${removed}/`);
       }))) this.invalidateProjects();
-    }));
+    }), directories.onDidCreate(uri => { void this.onCreatedPath(uri); }),
+      vscode.workspace.onDidCreateFiles(event => {
+        for (const uri of event.files) if (uri.path.endsWith('/pyproject.toml')) this.onManifestChange(uri);
+      }));
   }
   get projectCount(): number { return this.projects.length; }
   get activeProjectId(): string | undefined {
@@ -112,11 +118,24 @@ export class WorkbenchController implements vscode.Disposable {
     void vscode.commands.executeCommand('setContext', 'mcpy.projectFiles', files);
   }
   private onManifestChange(uri: vscode.Uri): void {
-    if (uri.scheme !== 'file') return;
-    const folder = vscode.workspace.getWorkspaceFolder(uri);
-    const relative = folder ? uri.path.slice(folder.uri.path.length).split('/') : [];
-    if (relative.some(part => EXCLUDED_DIRECTORIES.includes(part))) return;
+    if (!this.isProjectCandidate(uri)) return;
     this.invalidateProjects();
+  }
+  private isProjectCandidate(uri: vscode.Uri): boolean {
+    if (this.disposed || uri.scheme !== 'file') return false;
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    return !!folder && !uri.path.slice(folder.uri.path.length).split('/')
+      .some(part => EXCLUDED_DIRECTORIES.includes(part));
+  }
+  private async onCreatedPath(uri: vscode.Uri): Promise<void> {
+    if (!this.isProjectCandidate(uri) || uri.path.endsWith('/pyproject.toml')) return;
+    try {
+      if ((await vscode.workspace.fs.stat(uri)).type & vscode.FileType.Directory) {
+        // A parent-directory event can subsume all its newly written files.
+        // The shared debounce collapses bursts; ordinary file edits are ignored.
+        this.invalidateProjects();
+      }
+    } catch { /* The new path can disappear again before the event is processed. */ }
   }
   private invalidateProjects(): void {
     this.discoveryRevision++;
