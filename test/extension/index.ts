@@ -38,8 +38,18 @@ export async function run(): Promise<void> {
     assert.equal(api.getProjectCount(), expected, 'manifest watcher did not update project discovery');
   };
   await writeFile(path.join(added, 'pyproject.toml'), '[tool.mcpywrap]\n'); await waitForCount(3);
-  await writeFile(path.join(added, 'pyproject.toml'), '[project]\nname="ordinary-python"\n'); await waitForCount(2);
-  await writeFile(path.join(added, 'pyproject.toml'), '[tool.mcpywrap]\n'); await waitForCount(3);
+  const manifestUri = vscode.Uri.file(path.join(added, 'pyproject.toml'));
+  const editManifest = async (source: string) => {
+    const manifest = await vscode.workspace.openTextDocument(manifestUri);
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(manifestUri, new vscode.Range(manifest.positionAt(0), manifest.positionAt(manifest.getText().length)), source);
+    assert.ok(await vscode.workspace.applyEdit(edit));
+    assert.ok(await manifest.save());
+  };
+  // Exercise actual editor saves. FSEvents is allowed to coalesce rapid external
+  // writes to a freshly created directory; user saves have their own event.
+  await editManifest('[project]\nname="ordinary-python"\n'); await waitForCount(2);
+  await editManifest('[tool.mcpywrap]\n'); await waitForCount(3);
   await rm(added, { recursive: true }); await waitForCount(2);
   assert.equal(await callLog(), beforeNavigation, 'manifest changes must not launch mcpy');
 
