@@ -29,7 +29,7 @@ export class DevelopmentEnvironmentPanel implements vscode.Disposable {
     const sdk = current?.inspection.installed;
     this.status.text = `$(package) ModSDK · ${current ? sdk?.inEnvironment ? sdk.version : '待安装' : '检查开发环境'}`;
     this.status.tooltip = current
-      ? `${project.label}\nVS Code Python：${current.selection.executable}\nPython ${current.inspection.environment.version}\nModSDK：${sdk ? `${sdk.version} · ${sdk.inEnvironment ? '此环境' : '继承自其他环境'}` : '未安装'}\n点击管理补全库`
+      ? `${project.label}\nVS Code Python：${current.selection.executable}\nPython ${current.inspection.environment.version}\nModSDK：${sdk ? `${sdk.version} · ${sdk.inEnvironment ? '此环境' : '继承自其他环境'}` : '未安装'}\n最近一次检查结果；点击重新检查 / 管理补全库`
       : `${project.label}：点击确认 VS Code 当前 Python 环境和 ModSDK 补全库`;
     this.status.show();
   }
@@ -71,12 +71,14 @@ export class DevelopmentEnvironmentPanel implements vscode.Disposable {
           { label: '$(cloud-download) 安装 / 切换 ModSDK 补全库', action: 'install', detail: `安装目标：${snapshot.selection.executable}` },
           { label: '$(refresh) 重新检查', action: 'inspect', detail: '只读检查当前 Python 选择与安装状态' },
           { label: '$(symbol-variable) 选择 Python 解释器', action: 'select', detail: '使用 Microsoft Python 的原生环境选择器' },
+          { label: '$(refresh) 刷新 Python 补全服务', action: 'restart', detail: '调用 Python 原生语言服务重启命令' },
           { label: '$(extensions) 打开 Pylance 扩展', action: 'pylance', detail: '普通 Python 文件的补全与跳转服务' }
         ], { title: `${project.label} · Python ${env.version} · ModSDK ${snapshot.inspection.installed?.version ?? '未安装'}`,
           placeHolder: snapshot.selection.executable, matchOnDetail: true });
         if (!action) return;
         if (action.action === 'inspect') continue;
         if (action.action === 'select') { await this.python.select(resource); continue; }
+        if (action.action === 'restart') { await vscode.commands.executeCommand('python.analysis.restartLanguageServer'); return; }
         if (action.action === 'pylance') { await vscode.commands.executeCommand('extension.open', 'ms-python.vscode-pylance'); return; }
         const versions = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: '查询 ModSDK 可用版本', cancellable: false },
           () => this.environments.versions(project));
