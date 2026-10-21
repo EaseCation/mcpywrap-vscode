@@ -185,6 +185,7 @@ export class WorkbenchController implements vscode.Disposable {
       if (this.disposed) return;
       if (revision !== this.discoveryRevision) return;
       this.projects = found.projects;
+      this.development?.workspaceDiscovered(this.projects);
       this.fileProjects.clear();
       this.tree.setProjects(this.projects, [...issues, ...found.issues]);
       if (this.selected && !this.projects.some(p => p.id === this.selected?.project.id)) this.clearSelection();

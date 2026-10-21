@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DevelopmentHints } from '../application/developmentHints';
 import { DevelopmentEnvironments } from '../application/developmentEnvironments';
 import { DevelopmentSnapshot } from '../domain/developmentEnvironment';
 import { Project, ToolFailure } from '../domain/model';
@@ -12,13 +13,50 @@ export class DevelopmentEnvironmentPanel implements vscode.Disposable {
   private active?: { project: Project; resource: vscode.Uri };
   private disposed = false;
   private busy = false;
-  constructor(private readonly environments: DevelopmentEnvironments, private readonly python: VscodePythonEnvironment) {
+  private timer?: ReturnType<typeof setTimeout>;
+  private hintRevision = 0;
+  private fallback?: { project: Project; resource: vscode.Uri };
+  private readonly automaticErrors = new Set<string>();
+  constructor(private readonly environments: DevelopmentEnvironments, private readonly python: VscodePythonEnvironment, private readonly hints: DevelopmentHints) {
     this.status.command = 'mcpy.developmentEnvironment';
-    this.subscription = python.onDidChange(() => { this.cache.clear(); this.updateStatus(); });
+    this.subscription = python.onDidChange(() => { this.cache.clear(); this.hints.invalidate(); this.updateStatus(); this.scheduleHint(); });
   }
   setContext(project?: Project, resource?: vscode.Uri): void {
     this.active = project && resource ? { project, resource } : undefined;
-    this.updateStatus();
+    this.updateStatus(); this.scheduleHint();
+  }
+  workspaceDiscovered(projects: readonly Project[]): void {
+    const project = projects[0];
+    this.fallback = project ? { project, resource: vscode.Uri.joinPath(vscode.Uri.file(project.root), 'pyproject.toml') } : undefined;
+    this.scheduleHint();
+  }
+  private scheduleHint(): void {
+    const revision = ++this.hintRevision;
+    if (this.timer) clearTimeout(this.timer);
+    const context = this.active ?? this.fallback;
+    if (!context || this.disposed || !vscode.workspace.isTrusted || vscode.env.remoteName) return;
+    this.timer = setTimeout(() => { this.timer = undefined; void this.checkHint(context, revision); }, 1500);
+  }
+  private async checkHint(context: { project: Project; resource: vscode.Uri }, revision: number): Promise<void> {
+    if (this.busy || this.disposed || revision !== this.hintRevision || !vscode.workspace.isTrusted) return;
+    // Missing/disabled Python is handled by the explicit setup menu, without startup popups.
+    if (!vscode.extensions.getExtension('ms-python.python')) return;
+    try {
+      const snapshot = await this.hints.check(context.project, context.resource.toString());
+      if (!snapshot || this.disposed || this.busy || revision !== this.hintRevision) return;
+      this.cache.set(context.project.id, { project: context.project, snapshot }); this.updateStatus();
+      if (!this.hints.claimPrompt(snapshot)) return;
+      const inherited = snapshot.inspection.installed ? '仅在继承路径发现补全库' : '未安装 ModSDK 补全库';
+      const action = await vscode.window.showInformationMessage(
+        `${context.project.label}：VS Code 当前 Python ${inherited}。目标：${snapshot.selection.executable}`, '安装补全库', '选择 Python 环境');
+      if (!action || this.disposed || this.busy || !vscode.workspace.isTrusted) return;
+      if (action === '选择 Python 环境') { await this.python.select(context.resource); return; }
+      await this.open(context.project, context.resource);
+    } catch (error) {
+      if (this.disposed || revision !== this.hintRevision) return;
+      const message = error instanceof Error ? error.message : String(error);
+      if (!this.automaticErrors.has(message)) { this.automaticErrors.add(message); this.output.appendLine(`后台补全检查：${message}；可从“Python 开发环境与补全”手动处理。`); }
+    }
   }
   private updateStatus(): void {
     if (this.disposed || !this.active) { this.status.hide(); return; }
@@ -50,7 +88,8 @@ export class DevelopmentEnvironmentPanel implements vscode.Disposable {
       if (action) await vscode.commands.executeCommand('extension.open', 'ms-python.python');
       return;
     }
-    this.busy = true;
+    this.busy = true; this.hintRevision++; if (this.timer) clearTimeout(this.timer);
+    this.hints.invalidate();
     try {
       while (!this.disposed) {
         let snapshot: DevelopmentSnapshot;
@@ -111,5 +150,5 @@ export class DevelopmentEnvironmentPanel implements vscode.Disposable {
       throw error;
     } finally { this.busy = false; }
   }
-  dispose(): void { this.disposed = true; this.cache.clear(); this.subscription.dispose(); this.status.dispose(); this.output.dispose(); }
+  dispose(): void { this.disposed = true; this.hintRevision++; if (this.timer) clearTimeout(this.timer); this.hints.invalidate(); this.cache.clear(); this.subscription.dispose(); this.status.dispose(); this.output.dispose(); }
 }

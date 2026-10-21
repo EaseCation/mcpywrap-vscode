@@ -15,7 +15,8 @@ export async function run(): Promise<void> {
   // Linux is deliberately unsupported for local game operations; activation still works.
   if (process.platform === 'linux') { assert.equal(api.getProjectCount(), 0); return; }
   assert.equal(api.getProjectCount(), 2, 'nested projects are discovered automatically without settings; generated/cache projects are excluded');
-  const callLog = async () => (await readFile(process.env.MCPY_FIXTURE_LOG!, 'utf8').catch(() => '')).trim();
+  const allCalls = async () => (await readFile(process.env.MCPY_FIXTURE_LOG!, 'utf8').catch(() => '')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line) as { args: string[] });
+  const callLog = async () => (await allCalls()).filter(call => !call.args.includes('modsdk')).map(call => JSON.stringify(call)).join('\n');
   assert.equal(await callLog(), '', 'activation only identifies projects; it must not launch mcpy');
   const commands = await vscode.commands.getCommands();
   for (const name of ['refresh', 'run', 'newWorld', 'runTwoClients', 'stop', 'logs', 'executeSelection', 'reloadFile', 'doctor', 'developmentEnvironment']) {
@@ -232,5 +233,15 @@ export async function run(): Promise<void> {
   const callsAfterFailure = await callLog();
   await new Promise(resolve => setTimeout(resolve, 1100));
   assert.equal(await callLog(), callsAfterFailure, 'failed startup must not retry or poll');
+  await vscode.window.showTextDocument(document);
+  const hintDeadline = Date.now() + 10000;
+  while (!(await allCalls()).some(call => call.args.includes('modsdk')) && Date.now() < hintDeadline) await new Promise(resolve => setTimeout(resolve, 50));
+  const probes = (await allCalls()).filter(call => call.args.includes('modsdk'));
+  assert.ok(probes.length, 'recognized workspace must schedule an automatic SDK check');
+  assert.ok(probes.every(call => call.args.includes('--inspect') && call.args.includes('--python')), 'automatic checks must be offline/read-only with explicit selected Python');
+  const count = probes.length;
+  for (let i = 0; i < 4; i++) await vscode.window.showTextDocument(document);
+  await new Promise(resolve => setTimeout(resolve, 1800));
+  assert.equal((await allCalls()).filter(call => call.args.includes('modsdk')).length, count, 'cached interpreter checks must not repeat on editor navigation');
   console.log('Extension Host: activation, multi-project discovery, start, Python, reload and log snapshot passed.');
 }

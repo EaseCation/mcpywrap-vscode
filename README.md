@@ -5,7 +5,7 @@
 
 在 VS Code 代码工作区中，通过 [mcpywrap](https://github.com/EaseCation/mcpywrap) 管理 Minecraft 中国版游戏测试、查看日志、执行 Python 和热更模块。
 
-这是独立维护的开源扩展，目前处于 **0.1.2 开发预览**阶段。扩展单向调用 mcpy 的公开 CLI，mcpy 独立安装、独立升级，负责构建、部署和游戏生命周期。
+这是独立维护的开源扩展，目前处于 **0.1.3 开发预览**阶段。扩展单向调用 mcpy 的公开 CLI，mcpy 独立安装、独立升级，负责构建、部署和游戏生命周期。
 
 ## 功能与支持范围
 
@@ -44,7 +44,7 @@ mcpy --version
 在 VS Code 中选择“扩展 → … → 从 VSIX 安装”，加载生成的 `.vsix`。也可使用 CLI：
 
 ```sh
-code --install-extension ./mcpywrap-vscode-0.1.2.vsix
+code --install-extension ./mcpywrap-vscode-0.1.3.vsix
 ```
 
 ## 开始测试
@@ -73,7 +73,7 @@ code --install-extension ./mcpywrap-vscode-0.1.2.vsix
 
 需要 **mcpy 0.5.7+**，并安装/启用 Microsoft Python 和 Pylance（扩展包推荐提供二者）。旧 CLI 会提示升级。Pylance 负责普通 Python 文件的补全与跳转；若包变化未刷新，可执行“Python: Restart Language Server”。独立的“游戏内 Python (mcpy)”草稿仍仅提供高亮和基本编辑支持。
 
-多根工作区按文件传递作用域；同一文件夹内嵌套项目是否共享解释器由 Microsoft Python 的实际选择决定，扩展不会假定每个 pyproject 都有独立环境。状态栏使用缓存，解释器选择变更后失效；切换文件不扫描环境、不启动 CLI、不自动联网或安装。
+多根工作区按文件传递作用域；同一文件夹内嵌套项目是否共享解释器由 Microsoft Python 的实际选择决定，扩展不会假定每个 pyproject 都有独立环境。识别工作区后会防抖进行一次离线检查，缺少补全库时主动用原生通知引导安装或切换环境；每个解释器每窗口仅提示一次。按解释器合并检查并缓存，选择变更后失效；切换文件不重复启动 CLI、不自动联网或安装。
 
 ## 设置
 
