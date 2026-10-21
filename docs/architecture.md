@@ -68,8 +68,10 @@ VS Code 文件搜索提供工作区内 `**/pyproject.toml` 候选，排除环境
 
 候选搜索与 TOML 解析只在首次激活、显式刷新、工作区变化或声明 create/change/delete、保存及目录创建/删除后发生；声明事件防抖 250 ms，忽略缓存目录。识别结果和文件归属缓存于内存，切换文件不扫描、不启动 mcpy。标题菜单使用已打开文件的 resourcePath 集合匹配，点击按资源 URI 路由，支持拆分编辑器。首次激活只识别项目；运行时操作只查询所选项目，手动刷新全列表的查询并发最多 3 个项目。
 
-## 8. 运行时控制台与日志订阅
+## 8. 原生日志与片段编辑器
 
-新增独立 LogFollower 端口和可释放订阅。基础设施仅启动 `mcpy logs --follow --source all --format jsonl`，验证逐行 schema；presentation 不读取任何日志路径。旧 CLI 明确提示升级，保留快照查询，不启动后台子进程轮询。mcpy 提供的流是通用 CLI 能力，与 VS Code 无反向依赖。
+LogFollower 端口保持不变，仍由一个长期通用 CLI JSONL 流提供数据，presentation 不读取日志路径。应用层 LogHistory/协议过滤器维护有界共享历史和逐流半行缓存，来源/详情切换只回放内存，不重开跟随进程。
 
-RuntimeConsole 作为底部 WebviewView，接收已绑定的领域目标，复用 Workbench.execute 和能力校验。Webview 仅传用户意图；宿主检查身份、端侧、代码大小和并发，不信任前端传回的任意路径或命令。CSP 仅允许本扩展静态脚本/样式，用户代码与日志使用 textContent 展示。
+RuntimeConsole 使用两个原生 OutputChannel，分别承载引擎（engine/worker/系统消息）与脚本系统（game/Python 结果）。通过独立的 mcpy-log 语言与 TextMate grammar 实现按规则着色。palette 只为本语言的专用 scope 提供默认值，允许用户和主题覆盖；不调用 settings.update。搜索、复制、清空、自动滚动使用原生输出器。
+
+Python 片段使用原生 untitled Python 编辑器、QuickPick、编辑器标题命令、状态栏与快捷键。绑定按文档 URI 保存，执行复用 Workbench.execute 与能力检查；不创建 HTML、Webview、伪终端或自定义输入控件。关闭草稿保留已连接的游戏与日志。

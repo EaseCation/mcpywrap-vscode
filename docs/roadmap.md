@@ -17,7 +17,7 @@
 
 **阶段 1：基础流程实机验收与预览反馈。** 在 Windows 与 Apple Silicon macOS 上用独立测试项目，验证已有/新建世界、双人手动加入、Python 端侧、组热更和停止。检查保存进度、脚本准备失败和编辑器重载恢复。需要 mcpy 已安装和目标运行包；不允许 mock 结果替代。
 
-**阶段 2：日常迭代体验。** 添加公开 watch 命令的 TaskProvider、watch 生命周期、结构化进度、只读环境引导与明确的新建世界参数。通用 follow 日志与底部片段控制台已接入；可恢复 cursor 仍待后续能力支持。验收 watcher 退出保留游戏、两端选择、结构变化需重开、未知结果不重复注入。
+**阶段 2：日常迭代体验。** 添加公开 watch 命令的 TaskProvider、watch 生命周期、结构化进度、只读环境引导与明确的新建世界参数。通用 follow 日志、原生双通道输出和原生片段编辑器已接入；可恢复 cursor 仍待后续能力支持。验收 watcher 退出保留游戏、两端选择、结构变化需重开、未知结果不重复注入。
 
 **阶段 3：通用调试基础。** 先在 mcpy/独立后端验证 Windows 内置 ptvsd、macOS trace 或原生 hook。补齐通用 endpoint、能力、暂停控制与来源/行号映射。游戏 Python 2 与当前 Python Debugger 的协议兼容性逐版本测试；后端不放在 VS Code 扩展中。
 

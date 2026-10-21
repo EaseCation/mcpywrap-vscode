@@ -8,7 +8,8 @@ export async function run(): Promise<void> {
   const extension = vscode.extensions.getExtension('easecation.mcpywrap-vscode');
   assert.ok(extension, 'extension should be installed as a development extension');
   const api = await extension.activate() as { refresh(): Promise<void>; getProjectCount(): number; getActiveProjectId(): string | undefined;
-    getRuntimeState(): { selected?: string; sessions: number; transcript: { source: string; label: string; text: string }[] };
+    getRuntimeState(): { selected?: string; sessions: number; transcript: { source: string; label: string; text: string }[];
+      channels: string[]; raw: boolean; displayed: { engine: string; script: string } };
     executeRuntimeSnippet(key: string, side: 'client' | 'server', code: string): Promise<OperationResult | undefined> };
   // Linux is deliberately unsupported for local game operations; activation still works.
   if (process.platform === 'linux') { assert.equal(api.getProjectCount(), 0); return; }
@@ -31,6 +32,9 @@ export async function run(): Promise<void> {
   const titleMenus = extension.packageJSON.contributes.menus['editor/title'] as { command?: string; when: string }[];
   assert.ok(titleMenus.some(menu => menu.command === 'mcpy.run' && menu.when.includes('resourcePath in mcpy.projectFiles')));
   assert.equal(extension.packageJSON.contributes.configuration.properties['mcpy.projectRoots'], undefined);
+  assert.ok((await vscode.languages.getLanguages()).includes('mcpy-log'));
+  const colorRules = vscode.workspace.getConfiguration('editor').get<{ textMateRules?: { scope: string; settings: { foreground?: string } }[] }>('tokenColorCustomizations');
+  assert.ok(colorRules?.textMateRules?.some(rule => rule.scope === 'invalid.mcpy.error' && rule.settings.foreground), 'native output color defaults must actually register');
 
   const added = path.join(workspace, 'new-project');
   await mkdir(added);
@@ -63,7 +67,7 @@ export async function run(): Promise<void> {
   assert.equal(await callLog(), beforeNavigation, 'manifest changes must not launch mcpy');
 
   const document = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(workspace, 'project-a', 'logic.py')));
-  const editor = await vscode.window.showTextDocument(document);
+  await vscode.window.showTextDocument(document);
   const routed = await vscode.commands.executeCommand<OperationResult>('mcpy.run', vscode.Uri.file(path.join(workspace, 'project-b/pyproject.toml')));
   assert.equal(routed?.session, 'solo-session', 'title command must accept the clicked editor URI even when another project is active');
   const started = await vscode.commands.executeCommand<OperationResult>('mcpy.run');
@@ -81,6 +85,17 @@ export async function run(): Promise<void> {
   assert.ok(api.getRuntimeState().transcript.some(entry => entry.source === 'python' && entry.text.includes('结果')));
   assert.ok(api.getRuntimeState().transcript.some(entry => entry.source === 'engine' && entry.text.includes('live engine')));
   assert.ok(api.getRuntimeState().transcript.some(entry => entry.source === 'game' && entry.text.includes('live game')));
+  assert.deepEqual(api.getRuntimeState().channels, ['mcpy · 引擎', 'mcpy · 脚本系统']);
+  assert.ok(api.getRuntimeState().displayed.engine.includes('[Engine]'));
+  assert.ok(!api.getRuntimeState().displayed.script.includes('RN Call:'));
+  const beforeSwitch = await callLog();
+  await vscode.commands.executeCommand('mcpy.showEngineLog');
+  await vscode.commands.executeCommand('mcpy.showScriptLog');
+  await vscode.commands.executeCommand('mcpy.toggleLogDetails');
+  assert.ok(api.getRuntimeState().displayed.script.includes('RN Call:'));
+  await vscode.commands.executeCommand('mcpy.toggleLogDetails');
+  assert.ok(!api.getRuntimeState().displayed.script.includes('RN Call:'));
+  assert.equal(await callLog(), beforeSwitch, 'source/detail switching must replay memory, not invoke mcpy');
 
   // Use real Extension Host APIs; control only human choices for deterministic smoke tests.
   const descriptor = Object.getOwnPropertyDescriptor(vscode.window, 'showQuickPick');
@@ -90,6 +105,12 @@ export async function run(): Promise<void> {
     return (chooseHost && values.find(item => item.session?.role === 'host')) || values[0];
   } });
   try {
+    await vscode.commands.executeCommand('mcpy.newSnippet');
+    assert.equal(vscode.window.activeTextEditor?.document.languageId, 'python');
+    assert.equal(vscode.window.activeTextEditor?.document.uri.scheme, 'untitled', 'snippets use the native scratch editor');
+    const draftResult = await vscode.commands.executeCommand<OperationResult>('mcpy.runSnippet');
+    assert.equal(draftResult?.value, 2);
+    const editor = await vscode.window.showTextDocument(document);
     editor.selection = new vscode.Selection(1, 0, 2, 0);
     const executed = await vscode.commands.executeCommand<OperationResult>('mcpy.executeSelection');
     assert.equal(executed?.state, 'completed'); assert.equal(executed?.value, 2);

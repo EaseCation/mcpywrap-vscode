@@ -15,7 +15,6 @@ export class WorkbenchController implements vscode.Disposable {
   private projects: readonly Project[] = [];
   private readonly fileProjects = new Map<string, Project | undefined>();
   private readonly output = vscode.window.createOutputChannel('mcpy · 操作结果');
-  private readonly logOutput = vscode.window.createOutputChannel('mcpy · 日志快照');
   private readonly status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 30);
   private readonly disposables: vscode.Disposable[] = [];
   private selected?: { project: Project; session: Session; side: Side };
@@ -300,8 +299,9 @@ export class WorkbenchController implements vscode.Disposable {
     if (!choice) return undefined;
     const source = choice.source;
     const text = await this.progress('读取日志快照', () => this.workbench.logs(target, source));
-    this.logOutput.clear(); this.logOutput.appendLine(`日志快照 · ${new Date().toISOString()} · ${target.project.label} · ${target.kind} ${target.id} · ${source}`);
-    this.logOutput.append(text); this.logOutput.show(true); return text;
+    if (this.consolePanel) this.consolePanel.showSnapshot(target, source, text);
+    else { this.output.appendLine(text); this.output.show(true); }
+    return text;
   }
   private async executeSelection(node?: WorkspaceNode, resource?: vscode.Uri): Promise<OperationResult | undefined> {
     const editor = vscode.window.activeTextEditor;
@@ -309,6 +309,7 @@ export class WorkbenchController implements vscode.Disposable {
     if (resource && resource.toString() !== editor.document.uri.toString()) throw new ToolFailure('rejected', '请先选中该编辑器中的 Python 代码。');
     const code = editor.document.getText(editor.selection);
     const picked = await this.pickPythonTarget(await this.pickProject(node)); if (!picked) return undefined;
+    if (this.consolePanel) return this.consolePanel.executeInSession(picked.target, picked.session, picked.side, code);
     const result = await this.progress(`执行 Python · ${picked.side}`, () => this.workbench.execute(picked.target, picked.side, code));
     this.showResult(`执行 Python · ${picked.side}`, picked.target, result); return result;
   }
@@ -357,6 +358,6 @@ export class WorkbenchController implements vscode.Disposable {
     void vscode.commands.executeCommand('setContext', 'mcpy.activeProject', false);
     void vscode.commands.executeCommand('setContext', 'mcpy.projectFiles', []);
     for (const disposable of this.disposables) disposable.dispose();
-    this.tree.dispose(); this.output.dispose(); this.logOutput.dispose(); this.status.dispose();
+    this.tree.dispose(); this.output.dispose(); this.status.dispose();
   }
 }

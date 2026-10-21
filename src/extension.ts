@@ -17,7 +17,7 @@ export async function activate(context: vscode.ExtensionContext) {
   };
   const transport = new ProcessTransport(options);
   const workbench = new Workbench(new CliGateway(transport, new Utf8TemporarySource()), new CliLogFollower(options));
-  const runtime = new RuntimeConsole(workbench, context.extensionUri);
+  const runtime = new RuntimeConsole(workbench);
   const unsupported = vscode.env.remoteName ? '当前预览支持本机桌面工作区；Remote SSH/WSL 游戏操作尚未接入。'
     : process.platform !== 'darwin' && process.platform !== 'win32' ? '当前预览支持 Windows/macOS 本机桌面。' : undefined;
   const controller = new WorkbenchController(workbench, new FilesystemDiscovery(), unsupported, runtime);

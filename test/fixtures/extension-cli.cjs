@@ -8,7 +8,9 @@ if (args.includes('--file')) record.source = fs.readFileSync(args[args.indexOf('
 if (process.env.MCPY_FIXTURE_LOG) fs.appendFileSync(process.env.MCPY_FIXTURE_LOG, JSON.stringify(record) + '\n');
 if (args.includes('--follow')) {
   const session = args.includes('--group') ? 'host-session' : args[args.indexOf('--session') + 1];
-  for (const source of ['engine', 'game', 'worker']) process.stdout.write(JSON.stringify({ schema_version: 1, event: 'log', session, source, text: `live ${source} 中文\n` })+'\n');
+  for (const source of ['engine', 'game', 'worker']) process.stdout.write(JSON.stringify({ schema_version: 1, event: 'log', session, source,
+    text: source === 'game' ? '[Probe] live game 中文\nRN Call: transport\n[Run] script begin\nprint hidden\n[Run] script end\n__MCPY_RESULT_x__abc\n'
+      : source === 'engine' ? '[2026-10-21 10:00:00,001] [ERROR][Engine] live engine 中文\n' : 'live worker 中文\n' })+'\n');
   process.stdout.write(JSON.stringify({ schema_version: 1, event: 'end' })+'\n');
   return;
 }

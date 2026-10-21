@@ -10,11 +10,12 @@ test('follow is a single public JSONL command with no finite JSON option', () =>
   assert.deepEqual(request.args.slice(4), ['logs', '--group', 'g1', '--follow', '--source', 'all', '--format', 'jsonl', '--tail', '100']);
   assert.equal(request.args.includes('--json'), false);
 });
-test('runtime view belongs to a valid bottom panel container, not Explorer fallback', () => {
+test('logs use native output language and native Python editor commands', () => {
   const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
-  const panel = manifest.contributes.viewsContainers.panel[0];
-  assert.match(panel.id, /^[a-zA-Z0-9_-]+$/);
-  assert.ok(manifest.contributes.views[panel.id].some((view: { id: string; type: string }) => view.id === 'mcpy.console' && view.type === 'webview'));
+  assert.equal(manifest.contributes.viewsContainers.panel, undefined);
+  assert.ok(manifest.contributes.grammars.some((grammar: { language: string }) => grammar.language === 'mcpy-log'));
+  assert.ok(manifest.contributes.keybindings.some((binding: { command: string }) => binding.command === 'mcpy.runSnippet'));
+  assert.equal(readFileSync('src/presentation/runtimeConsole.ts', 'utf8').includes('WebviewViewProvider'), false);
 });
 test('log parser preserves repeated messages, UTF-8 and partial lines', () => {
   const wire = JSON.stringify({ schema_version: 1, event: 'log', session: 's1', source: 'game', text: '中文\n中文\n半行' });

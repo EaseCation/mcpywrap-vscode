@@ -1,0 +1,166 @@
+{
+  "name": "mcpy log",
+  "scopeName": "text.mcpy-log",
+  "patterns": [
+    {
+      "match": "^(?:(⟦[^⟧]*⟧) )?(\\[\\+\\].*)$",
+      "captures": {
+        "1": {
+          "name": "comment.mcpy.member"
+        },
+        "2": {
+          "name": "markup.inserted.mcpy.success"
+        }
+      }
+    },
+    {
+      "match": "^(?:(⟦[^⟧]*⟧) )?(\\[-\\].*)$",
+      "captures": {
+        "1": {
+          "name": "comment.mcpy.member"
+        },
+        "2": {
+          "name": "constant.language.mcpy.closed"
+        }
+      }
+    },
+    {
+      "match": "^(?:(⟦[^⟧]*⟧) )?(\\[!\\].*)$",
+      "captures": {
+        "1": {
+          "name": "comment.mcpy.member"
+        },
+        "2": {
+          "name": "invalid.mcpy.error"
+        }
+      }
+    },
+    {
+      "begin": "^(?:(⟦[^⟧]*⟧) )?(\\[\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2},\\d+\\])",
+      "beginCaptures": {
+        "1": {
+          "name": "comment.mcpy.member"
+        },
+        "2": {
+          "name": "comment.mcpy.timestamp"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "match": "\\[ERROR\\]",
+          "name": "invalid.mcpy.error"
+        },
+        {
+          "match": "\\[(?:WARN|WARNING)\\]",
+          "name": "markup.deleted.mcpy.warning"
+        },
+        {
+          "match": "\\[SUCCESS\\]",
+          "name": "markup.inserted.mcpy.success"
+        },
+        {
+          "match": "\\[DEBUG\\]",
+          "name": "comment.mcpy.debug"
+        },
+        {
+          "match": "\\[Developer\\]",
+          "name": "keyword.control.mcpy.tag"
+        },
+        {
+          "match": "\\[Engine\\]",
+          "name": "entity.name.tag.mcpy.engine"
+        },
+        {
+          "match": "\\[INFO\\]",
+          "name": "meta.mcpy.info"
+        },
+        {
+          "match": "\\[[A-Za-z0-9_]+\\]",
+          "name": "constant.language.mcpy.response"
+        }
+      ]
+    },
+    {
+      "match": "^(?:(⟦[^⟧]*⟧) )?(.*\\b(?:Error|ERROR|Exception|Traceback|[A-Za-z_][A-Za-z0-9_.]*(?:Error|Exception))\\b.*)$",
+      "captures": {
+        "1": {
+          "name": "comment.mcpy.member"
+        },
+        "2": {
+          "name": "invalid.mcpy.error"
+        }
+      }
+    },
+    {
+      "match": "^(?:(⟦[^⟧]*⟧) )?(.*\\b(?:Warn|WARNING|WARN)\\b.*)$",
+      "captures": {
+        "1": {
+          "name": "comment.mcpy.member"
+        },
+        "2": {
+          "name": "markup.deleted.mcpy.warning"
+        }
+      }
+    },
+    {
+      "match": "^(?:(⟦[^⟧]*⟧) )?(\\[\\w+\\].*)$",
+      "captures": {
+        "1": {
+          "name": "comment.mcpy.member"
+        },
+        "2": {
+          "name": "keyword.control.mcpy.tag"
+        }
+      }
+    },
+    {
+      "match": "^(?:(⟦[^⟧]*⟧) )?((?:LoadWindowsAddonPy|ECRLMaya|MayaCraft).*)$",
+      "captures": {
+        "1": {
+          "name": "comment.mcpy.member"
+        },
+        "2": {
+          "name": "entity.name.tag.mcpy.load"
+        }
+      }
+    },
+    {
+      "match": "^(?:(⟦[^⟧]*⟧) )?((?i:.*(?:success|succeeded|complete|done).*))$",
+      "captures": {
+        "1": {
+          "name": "comment.mcpy.member"
+        },
+        "2": {
+          "name": "markup.inserted.mcpy.success"
+        }
+      }
+    },
+    {
+      "match": "^(?:(⟦[^⟧]*⟧) )?(.*(?:onRoom|callback|event|listener).*)$",
+      "captures": {
+        "1": {
+          "name": "comment.mcpy.member"
+        },
+        "2": {
+          "name": "markup.deleted.mcpy.event"
+        }
+      }
+    },
+    {
+      "match": "^(?:(⟦[^⟧]*⟧) )?(\\{.+\\})$",
+      "captures": {
+        "1": {
+          "name": "comment.mcpy.member"
+        },
+        "2": {
+          "name": "constant.language.mcpy.response"
+        }
+      }
+    },
+    {
+      "match": "^⟦[^⟧]*⟧",
+      "name": "comment.mcpy.member"
+    }
+  ]
+}

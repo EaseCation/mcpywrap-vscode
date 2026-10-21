@@ -90,8 +90,48 @@
       },
       {
         "command": "mcpy.console",
-        "title": "mcpy: 打开运行时控制台",
+        "title": "mcpy: 连接会话日志",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "mcpy.showEngineLog",
+        "title": "mcpy: 显示引擎日志",
+        "icon": "$(output)"
+      },
+      {
+        "command": "mcpy.showScriptLog",
+        "title": "mcpy: 显示脚本系统日志",
+        "icon": "$(output)"
+      },
+      {
+        "command": "mcpy.switchLog",
+        "title": "mcpy: 切换引擎 / 脚本系统",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "mcpy.toggleLogDetails",
+        "title": "mcpy: 切换协议详情",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "mcpy.disconnectLogs",
+        "title": "mcpy: 断开日志订阅",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "mcpy.newSnippet",
+        "title": "mcpy: 新建运行时 Python 片段",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "mcpy.runSnippet",
+        "title": "mcpy: 在游戏执行片段",
+        "icon": "$(play)"
+      },
+      {
+        "command": "mcpy.changeSnippetTarget",
+        "title": "mcpy: 切换片段执行目标",
+        "icon": "$(server-process)"
       }
     ],
     "configuration": {
@@ -128,13 +168,6 @@
           "title": "游戏测试",
           "icon": "media/game.svg"
         }
-      ],
-      "panel": [
-        {
-          "id": "mcpy-runtime",
-          "title": "游戏测试",
-          "icon": "media/game.svg"
-        }
       ]
     },
     "views": {
@@ -142,13 +175,6 @@
         {
           "id": "mcpy.sessions",
           "name": "测试工作区"
-        }
-      ],
-      "mcpy-runtime": [
-        {
-          "type": "webview",
-          "id": "mcpy.console",
-          "name": "日志与 Python"
         }
       ]
     },
@@ -169,6 +195,26 @@
           "command": "mcpy.refresh",
           "when": "view == mcpy.sessions",
           "group": "navigation@2"
+        },
+        {
+          "command": "mcpy.switchLog",
+          "when": "view == workbench.panel.output && mcpy.hasRuntime",
+          "group": "navigation@10"
+        },
+        {
+          "command": "mcpy.newSnippet",
+          "when": "view == workbench.panel.output && mcpy.hasRuntime",
+          "group": "navigation@11"
+        },
+        {
+          "command": "mcpy.toggleLogDetails",
+          "when": "view == workbench.panel.output && mcpy.hasRuntime",
+          "group": "navigation@12"
+        },
+        {
+          "command": "mcpy.disconnectLogs",
+          "when": "view == workbench.panel.output && mcpy.hasRuntime",
+          "group": "navigation@13"
         }
       ],
       "view/item/context": [
@@ -220,6 +266,11 @@
           "submenu": "mcpy.projectActions",
           "when": "resourcePath in mcpy.projectFiles && resourceScheme == file && isWorkspaceTrusted",
           "group": "navigation@12"
+        },
+        {
+          "command": "mcpy.runSnippet",
+          "when": "resourcePath in mcpy.snippetFiles && resourceScheme == untitled",
+          "group": "navigation@10"
         }
       ],
       "mcpy.projectActions": [
@@ -230,6 +281,22 @@
         {
           "command": "mcpy.runTwoClients",
           "group": "1_run@2"
+        },
+        {
+          "command": "mcpy.newSnippet",
+          "group": "2_session@1"
+        },
+        {
+          "command": "mcpy.showEngineLog",
+          "group": "2_session@2"
+        },
+        {
+          "command": "mcpy.showScriptLog",
+          "group": "2_session@3"
+        },
+        {
+          "command": "mcpy.toggleLogDetails",
+          "group": "2_session@4"
         },
         {
           "command": "mcpy.console",
@@ -255,7 +322,108 @@
         "label": "游戏测试",
         "icon": "$(beaker)"
       }
-    ]
+    ],
+    "keybindings": [
+      {
+        "command": "mcpy.runSnippet",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorTextFocus && mcpy.snippetActive"
+      }
+    ],
+    "languages": [
+      {
+        "id": "mcpy-log",
+        "aliases": [
+          "mcpy log"
+        ]
+      }
+    ],
+    "grammars": [
+      {
+        "language": "mcpy-log",
+        "scopeName": "text.mcpy-log",
+        "path": "./syntaxes/mcpy-log.tmLanguage.json"
+      }
+    ],
+    "configurationDefaults": {
+      "editor.tokenColorCustomizations": {
+        "textMateRules": [
+          {
+            "scope": "comment.mcpy.timestamp",
+            "settings": {
+              "foreground": "#808080"
+            }
+          },
+          {
+            "scope": "comment.mcpy.member",
+            "settings": {
+              "foreground": "#808080"
+            }
+          },
+          {
+            "scope": "comment.mcpy.debug",
+            "settings": {
+              "foreground": "#808080"
+            }
+          },
+          {
+            "scope": "invalid.mcpy.error",
+            "settings": {
+              "foreground": "#E5484D"
+            }
+          },
+          {
+            "scope": "markup.deleted.mcpy.warning",
+            "settings": {
+              "foreground": "#C69320"
+            }
+          },
+          {
+            "scope": "markup.deleted.mcpy.event",
+            "settings": {
+              "foreground": "#C69320"
+            }
+          },
+          {
+            "scope": "markup.inserted.mcpy.success",
+            "settings": {
+              "foreground": "#4EA52E"
+            }
+          },
+          {
+            "scope": "entity.name.tag.mcpy.engine",
+            "settings": {
+              "foreground": "#3794FF"
+            }
+          },
+          {
+            "scope": "entity.name.tag.mcpy.load",
+            "settings": {
+              "foreground": "#3794FF"
+            }
+          },
+          {
+            "scope": "keyword.control.mcpy.tag",
+            "settings": {
+              "foreground": "#C586C0"
+            }
+          },
+          {
+            "scope": "constant.language.mcpy.response",
+            "settings": {
+              "foreground": "#2AA198"
+            }
+          },
+          {
+            "scope": "constant.language.mcpy.closed",
+            "settings": {
+              "foreground": "#2AA198"
+            }
+          }
+        ]
+      }
+    }
   },
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -276,6 +444,8 @@
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.28.2",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
   }
 }
