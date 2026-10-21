@@ -16,7 +16,7 @@
    | Publisher | `easecation` |
 
    GitHub OIDC issuer 为 `https://token.actions.githubusercontent.com`，audience 为 `marketplace.visualstudio.com`，environment subject 为 `repo:EaseCation/mcpywrap-vscode:environment:marketplace`。不授权其他仓库或任意工作流。首次上架是否需要先在管理页创建/上传扩展，以账户实际返回为准；未完成真实验证不能将此流程宣称为已上架。
-3. 在 GitHub 仓库配置名为 `marketplace` 的 Environment，将部署来源限制为发行标签。配置完成后设置仓库变量 `MARKETPLACE_PUBLISH_ENABLED=true`，才会在推送发行标签时自动上架。该变量是发布开关，不是凭据；测试与打包不需要它。
+3. 在 GitHub 仓库配置名为 `marketplace` 的 Environment，将部署来源限制为 `v*` 标签和 `main`（后者用于手动指定已存在标签的发布/验证）。配置完成后设置仓库变量 `MARKETPLACE_PUBLISH_ENABLED=true`，才会在推送发行标签时自动上架。该变量是发布开关，不是凭据；测试与打包不需要它。
 
 OIDC 使用短期凭据，不需要创建 Azure DevOps PAT、保存 `VSCE_PAT` 或创建第二个开发者账号。若管理端尚未开放可信发布，使用微软官方 Microsoft Entra ID 工作负载身份联合方案；不能假定 GitHub `GITHUB_TOKEN` 可直接发布到 Marketplace，也不能自动回退到其他凭据。
 
