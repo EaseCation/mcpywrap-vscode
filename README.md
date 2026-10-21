@@ -5,7 +5,7 @@
 
 在 VS Code 代码工作区中，通过 [mcpywrap](https://github.com/EaseCation/mcpywrap) 管理 Minecraft 中国版游戏测试、查看日志、执行 Python 和热更模块。
 
-这是独立维护的开源扩展，目前处于 **0.1.1 开发预览**阶段。扩展单向调用 mcpy 的公开 CLI，mcpy 独立安装、独立升级，负责构建、部署和游戏生命周期。
+这是独立维护的开源扩展，目前处于 **0.1.2 开发预览**阶段。扩展单向调用 mcpy 的公开 CLI，mcpy 独立安装、独立升级，负责构建、部署和游戏生命周期。
 
 ## 功能与支持范围
 
@@ -16,6 +16,7 @@
 | 日志 | 原生 Output 中的“引擎 / 脚本系统”双通道；自动染色、协议详情切换和增量日志；保留快照查询 |
 | Python 执行 | 专用游戏内 Python 草稿、会话/端侧选择、执行回执；也支持项目内选区 |
 | 模块热更 | 热更已保存的 Python 文件，组成员通过组入口协调更新 |
+| ModSDK 补全 | 读取 VS Code 当前文件的实际 Python 选择，定向安装并核验；支持无 pip 的虚拟环境 |
 | 环境诊断 | 只读诊断、CLI 路径配置及错误提示 |
 
 当前面向 **Windows / Apple Silicon macOS 本机桌面**。Linux 参与构建和契约测试；Remote SSH、WSL 和虚拟工作区尚未接入游戏操作。扩展不携带 Python、游戏运行包或调试后端，游戏仍需要图形会话和 GPU。
@@ -43,7 +44,7 @@ mcpy --version
 在 VS Code 中选择“扩展 → … → 从 VSIX 安装”，加载生成的 `.vsix`。也可使用 CLI：
 
 ```sh
-code --install-extension ./mcpywrap-vscode-0.1.1.vsix
+code --install-extension ./mcpywrap-vscode-0.1.2.vsix
 ```
 
 ## 开始测试
@@ -63,6 +64,16 @@ code --install-extension ./mcpywrap-vscode-0.1.1.vsix
 日志跟随需要 **mcpy 0.5.5 或更新版本**的 `logs --follow --format jsonl` 能力。旧 CLI 会明确提示更新；启动耗时提示与日志显示均不会通过反复启动 CLI 轮询状态。
 
 关闭面板或编辑器会保留游戏。明确结束测试时使用扩展的停止命令或 mcpy CLI。
+
+## Python 开发环境与自动补全
+
+打开普通项目 `.py` 文件，点击“游戏测试 → Python 开发环境与补全”（或状态栏 ModSDK）。扩展使用 Microsoft Python 的公开 API 获取此文件实际选用的解释器，显示完整路径、版本、环境前缀和已安装 SDK；不会使用终端 PATH、`python.defaultInterpreterPath` 或 mcpy 自身环境替代。
+
+选择“安装 / 切换 ModSDK 补全库”并选定与游戏相符的 SDK 版本，确认具体目标后由 mcpy 强制兼容 Python 3 定向安装 `mc-netease-sdk`。安装前后核验同一个环境，支持目标虚拟环境未安装 pip；失败不会改装到系统环境。安装期间切换解释器时，安装保留原目标，当前选择需要重新检查。检查过程不导入游戏 SDK。
+
+需要 **mcpy 0.5.7+**，并安装/启用 Microsoft Python 和 Pylance（扩展包推荐提供二者）。旧 CLI 会提示升级。Pylance 负责普通 Python 文件的补全与跳转；若包变化未刷新，可执行“Python: Restart Language Server”。独立的“游戏内 Python (mcpy)”草稿仍仅提供高亮和基本编辑支持。
+
+多根工作区按文件传递作用域；同一文件夹内嵌套项目是否共享解释器由 Microsoft Python 的实际选择决定，扩展不会假定每个 pyproject 都有独立环境。状态栏使用缓存，解释器选择变更后失效；切换文件不扫描环境、不启动 CLI、不自动联网或安装。
 
 ## 设置
 

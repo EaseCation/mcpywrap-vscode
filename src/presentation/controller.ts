@@ -4,6 +4,7 @@ import { Workbench } from '../application/workbench';
 import { OperationResult, Project, Session, Side, Target, ToolFailure } from '../domain/model';
 import { WorkspaceNode, WorkspaceTree } from './tree';
 import { RuntimeConsole } from './runtimeConsole';
+import { DevelopmentEnvironmentPanel } from './developmentEnvironment';
 import { StartupFeedback } from '../application/startupFeedback';
 
 const EXCLUDED_DIRECTORIES = ['.git', '.mcpy', '.runtime', '.venv', 'venv', 'env', 'node_modules',
@@ -29,7 +30,7 @@ export class WorkbenchController implements vscode.Disposable {
   private readonly startingProjects = new Set<string>();
 
   constructor(private readonly workbench: Workbench, private readonly discovery: ProjectDiscovery,
-    private readonly unsupportedReason?: string, private readonly consolePanel?: RuntimeConsole) {
+    private readonly unsupportedReason?: string, private readonly consolePanel?: RuntimeConsole, private readonly development?: DevelopmentEnvironmentPanel) {
     this.status.text = '$(beaker) mcpy · 选择目标';
     this.status.command = 'mcpy.selectTarget'; this.status.show();
     this.disposables.push(vscode.window.createTreeView('mcpy.sessions', { treeDataProvider: this.tree }));
@@ -58,6 +59,12 @@ export class WorkbenchController implements vscode.Disposable {
     register('selectTarget', async node => { await this.pickPythonTarget(await this.pickProject(node)); });
     register('executeSelection', (node, resource) => this.executeSelection(node, resource));
     register('reloadFile', (node, resource) => this.reloadFile(node, resource));
+    register('developmentEnvironment', async (node, resource) => {
+      const project = await this.pickProject(node); if (!project) return;
+      const editor = vscode.window.activeTextEditor?.document.uri;
+      const scope = resource ?? (!node && editor && this.projectForFile(editor)?.id === project.id ? editor : vscode.Uri.joinPath(vscode.Uri.file(project.root), 'pyproject.toml'));
+      return this.development?.open(project, scope);
+    });
     register('doctor', async node => {
       const project = await this.pickProject(node);
       if (project) this.showResult('检查运行环境', { project, id: '', kind: 'session' }, await this.progress('检查运行环境', () => this.workbench.diagnose(project)));
@@ -113,6 +120,8 @@ export class WorkbenchController implements vscode.Disposable {
     if (this.disposed) return;
     void vscode.commands.executeCommand('setContext', 'mcpy.activeProject',
       !this.unsupportedReason && vscode.workspace.isTrusted && this.activeProjectId !== undefined);
+    const resource = vscode.window.activeTextEditor?.document.uri;
+    this.development?.setContext(resource ? this.projectForFile(resource) : undefined, resource);
     const files: string[] = [];
     if (!this.unsupportedReason && vscode.workspace.isTrusted) {
       for (const document of vscode.workspace.textDocuments) {

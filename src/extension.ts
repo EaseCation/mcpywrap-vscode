@@ -1,4 +1,8 @@
 import * as vscode from 'vscode';
+import { DevelopmentEnvironments } from './application/developmentEnvironments';
+import { CliDevelopmentEnvironmentGateway } from './infrastructure/mcpy/developmentEnvironment';
+import { DevelopmentEnvironmentPanel } from './presentation/developmentEnvironment';
+import { VscodePythonEnvironment } from './presentation/pythonEnvironment';
 import { randomUUID } from 'node:crypto';
 import { Workbench } from './application/workbench';
 import { ProcessTransport } from './infrastructure/mcpy/transport';
@@ -22,8 +26,10 @@ export async function activate(context: vscode.ExtensionContext) {
   const runtime = new RuntimeConsole(workbench, vscode.Uri.joinPath(snippetRoot, randomUUID()), snippetRoot);
   const unsupported = vscode.env.remoteName ? '当前预览支持本机桌面工作区；Remote SSH/WSL 游戏操作尚未接入。'
     : process.platform !== 'darwin' && process.platform !== 'win32' ? '当前预览支持 Windows/macOS 本机桌面。' : undefined;
-  const controller = new WorkbenchController(workbench, new FilesystemDiscovery(), unsupported, runtime);
-  context.subscriptions.push(controller, transport, runtime);
+  const python = new VscodePythonEnvironment();
+  const development = new DevelopmentEnvironmentPanel(new DevelopmentEnvironments(new CliDevelopmentEnvironmentGateway(transport), python), python);
+  const controller = new WorkbenchController(workbench, new FilesystemDiscovery(), unsupported, runtime, development);
+  context.subscriptions.push(controller, transport, runtime, development, python);
   await controller.initialize();
   return { refresh: () => controller.refresh(), getProjectCount: () => controller.projectCount,
     getActiveProjectId: () => controller.activeProjectId, getRuntimeState: () => runtime.getState(),

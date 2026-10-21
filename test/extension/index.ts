@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { VscodePythonEnvironment } from '../../src/presentation/pythonEnvironment';
 import { OperationResult } from '../../src/domain/model';
 
 export async function run(): Promise<void> {
@@ -17,7 +18,7 @@ export async function run(): Promise<void> {
   const callLog = async () => (await readFile(process.env.MCPY_FIXTURE_LOG!, 'utf8').catch(() => '')).trim();
   assert.equal(await callLog(), '', 'activation only identifies projects; it must not launch mcpy');
   const commands = await vscode.commands.getCommands();
-  for (const name of ['refresh', 'run', 'newWorld', 'runTwoClients', 'stop', 'logs', 'executeSelection', 'reloadFile', 'doctor']) {
+  for (const name of ['refresh', 'run', 'newWorld', 'runTwoClients', 'stop', 'logs', 'executeSelection', 'reloadFile', 'doctor', 'developmentEnvironment']) {
     assert.ok(commands.includes(`mcpy.${name}`), `missing command: ${name}`);
   }
   if (process.platform !== 'darwin') return;
@@ -65,6 +66,20 @@ export async function run(): Promise<void> {
   assert.ok(await vscode.workspace.applyEdit(remove)); await waitForCount(2);
   await rm(added, { recursive: true });
   assert.equal(await callLog(), beforeNavigation, 'manifest changes must not launch mcpy');
+
+  const python = new VscodePythonEnvironment();
+  assert.equal(python.current(vscode.Uri.file(path.join(workspace, 'project-a/logic.py')).toString()), undefined, 'Python is not activated by editor navigation');
+  const resourceA = vscode.Uri.file(path.join(workspace, 'project-a/logic.py')).toString();
+  const resourceB = vscode.Uri.file(path.join(workspace, 'project-b/logic.py')).toString();
+  assert.equal((await python.selected(resourceA)).executable, '/fixture/a/bin/python');
+  assert.equal((await python.selected(resourceB)).executable, '/fixture/b/bin/python', 'selection must be resource scoped');
+  let environmentChanges = 0;
+  const changed = python.onDidChange(() => { environmentChanges++; });
+  await vscode.commands.executeCommand('mcpyFixture.changePython');
+  assert.equal(environmentChanges, 1);
+  assert.equal((await python.selected(resourceA)).executable, '/fixture/changed-a/bin/python');
+  assert.equal(await callLog(), beforeNavigation, 'environment API discovery must not run CLI or pip');
+  changed.dispose(); python.dispose();
 
   const document = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(workspace, 'project-a', 'logic.py')));
   await vscode.window.showTextDocument(document);
