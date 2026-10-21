@@ -131,7 +131,7 @@
       ],
       "panel": [
         {
-          "id": "mcpy.runtime",
+          "id": "mcpy-runtime",
           "title": "游戏测试",
           "icon": "media/game.svg"
         }
@@ -144,7 +144,7 @@
           "name": "测试工作区"
         }
       ],
-      "mcpy.runtime": [
+      "mcpy-runtime": [
         {
           "type": "webview",
           "id": "mcpy.console",
