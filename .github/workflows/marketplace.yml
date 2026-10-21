@@ -13,6 +13,10 @@ on:
         description: Publish to Marketplace after checks (false only validates and packages)
         type: boolean
         default: false
+      verify_credentials:
+        description: Verify configured Entra/PAT membership only; never upload a package
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -78,11 +82,11 @@ jobs:
     if: >-
       github.repository == 'EaseCation/mcpywrap-vscode' &&
       ((github.event_name == 'push' && vars.MARKETPLACE_PUBLISH_ENABLED == 'true') ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish))
+      (github.event_name == 'workflow_dispatch' && (inputs.publish || inputs.verify_credentials)))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      MARKETPLACE_AUTH: ${{ vars.MARKETPLACE_AUTH || 'oidc' }}
+      MARKETPLACE_AUTH: ${{ vars.MARKETPLACE_AUTH || 'entra' }}
     environment:
       name: marketplace
       url: https://marketplace.visualstudio.com/items?itemName=easecation.mcpywrap-vscode
@@ -110,13 +114,53 @@ jobs:
           RELEASE_VERSION: ${{ needs.release.outputs.version }}
         run: node scripts/marketplace-release.mjs package
       - name: Validate explicit authentication mode
+        env:
+          VERIFY_CREDENTIALS: ${{ inputs.verify_credentials || false }}
         run: |
           case "$MARKETPLACE_AUTH" in
-            oidc|pat) ;;
-            *) echo "MARKETPLACE_AUTH must be oidc or pat" >&2; exit 1 ;;
+            oidc)
+              if [ "$VERIFY_CREDENTIALS" = "true" ]; then
+                echo "Credential-only verification supports entra or pat; direct Marketplace OIDC needs its trust policy and a real publish." >&2
+                exit 1
+              fi
+              ;;
+            entra|pat) ;;
+            *) echo "MARKETPLACE_AUTH must be entra, oidc or pat" >&2; exit 1 ;;
           esac
+      - name: Validate Entra identity configuration
+        if: env.MARKETPLACE_AUTH == 'entra'
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          if [ -z "$AZURE_CLIENT_ID" ] || [ -z "$AZURE_TENANT_ID" ]; then
+            echo "Configure the Entra application and its GitHub federated credential, then set AZURE_CLIENT_ID and AZURE_TENANT_ID in marketplace environment secrets. No secret password is needed." >&2
+            exit 1
+          fi
+      - name: Exchange GitHub OIDC for a short-lived Entra identity
+        if: env.MARKETPLACE_AUTH == 'entra'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Identify Marketplace principal and verify Publisher membership
+        if: env.MARKETPLACE_AUTH == 'entra'
+        run: |
+          principal_id=$(az rest --method get --url 'https://app.vssps.visualstudio.com/_apis/profile/profiles/me' --resource 499b84ac-1321-427f-aa17-267ca6975798 --query id --output tsv)
+          if [ -z "$principal_id" ]; then
+            echo "Marketplace did not return a profile identity." >&2
+            exit 1
+          fi
+          echo "Marketplace profile ID for Contributor membership: $principal_id" >> "$GITHUB_STEP_SUMMARY"
+          npx --no-install vsce verify-pat easecation --azure-credential
+      - name: Publish using the federated Entra identity
+        if: env.MARKETPLACE_AUTH == 'entra' && !inputs.verify_credentials
+        env:
+          VSIX_PATH: release-package/${{ needs.release.outputs.file }}
+        run: npx --no-install vsce publish --azure-credential --packagePath "$VSIX_PATH"
       - name: Publish with OIDC (no credential fallback)
-        if: env.MARKETPLACE_AUTH == 'oidc'
+        if: env.MARKETPLACE_AUTH == 'oidc' && !inputs.verify_credentials
         env:
           VSIX_PATH: release-package/${{ needs.release.outputs.file }}
         run: npx --no-install vsce publish --oidc --packagePath "$VSIX_PATH"
@@ -125,9 +169,13 @@ jobs:
         env:
           VSIX_PATH: release-package/${{ needs.release.outputs.file }}
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          VERIFY_CREDENTIALS: ${{ inputs.verify_credentials || false }}
         run: |
           if [ -z "$VSCE_PAT" ]; then
             echo "Configure VSCE_PAT in the marketplace environment; no fallback will be attempted." >&2
             exit 1
           fi
-          npx --no-install vsce publish --packagePath "$VSIX_PATH"
+          npx --no-install vsce verify-pat easecation
+          if [ "$VERIFY_CREDENTIALS" != "true" ]; then
+            npx --no-install vsce publish --packagePath "$VSIX_PATH"
+          fi
