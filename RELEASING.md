@@ -44,6 +44,12 @@ OIDC 使用短期凭据，不需要创建 Azure DevOps PAT 或保存 `VSCE_PAT`�
 4. 检查 VSIX 内的扩展身份、版本及摘要，然后在 `marketplace` Environment 中使用显式选定的 OIDC 或 PAT 认证发布这份已检查的包。不会在发布时重新打包、自动加版本、跳过重复版本或回退其他认证。
 5. 查看工作流和 [Marketplace 条目](https://marketplace.visualstudio.com/items?itemName=easecation.mcpywrap-vscode)。Marketplace 会执行自己的校验与安全扫描，CLI 上传成功不等于已公开可安装；出现问题先查原版本状态，不自动覆盖或重复发布。
 
+已手动上传某版本后，可用 `verify_credentials=true` 对已配置的 PAT 做只读发布权限核验，完成全部构建和包校验后执行 `vsce verify-pat easecation`，绝不上传或重复发布该版本。此模式优先于 publish=true，当前仅支持显式 PAT 认证；OIDC 在未配置真实信任时不会伪装成验证成功。
+
+```sh
+gh workflow run marketplace.yml --ref main -f tag=v0.1.4 -f publish=false -f verify_credentials=true
+```
+
 工作流也支持手动选择现有标签。`publish=false` 为默认值，仅运行校验/打包；明确设置 `publish=true` 才会提交到市场。普通分支与 PR 始终只执行无凭据检查。首次配置完成前，可手动对已有 `v0.1.3` 做 dry run 验证流程，无需发布身份。
 
 ```sh

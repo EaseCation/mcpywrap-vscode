@@ -13,6 +13,10 @@ on:
         description: Publish to Marketplace after checks (false only validates and packages)
         type: boolean
         default: false
+      verify_credentials:
+        description: Verify configured PAT only; never upload a package
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -78,7 +82,7 @@ jobs:
     if: >-
       github.repository == 'EaseCation/mcpywrap-vscode' &&
       ((github.event_name == 'push' && vars.MARKETPLACE_PUBLISH_ENABLED == 'true') ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish))
+      (github.event_name == 'workflow_dispatch' && (inputs.publish || inputs.verify_credentials)))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -110,13 +114,21 @@ jobs:
           RELEASE_VERSION: ${{ needs.release.outputs.version }}
         run: node scripts/marketplace-release.mjs package
       - name: Validate explicit authentication mode
+        env:
+          VERIFY_CREDENTIALS: ${{ inputs.verify_credentials || false }}
         run: |
           case "$MARKETPLACE_AUTH" in
-            oidc|pat) ;;
+            oidc)
+              if [ "$VERIFY_CREDENTIALS" = "true" ]; then
+                echo "Credential-only verification currently requires MARKETPLACE_AUTH=pat; no upload was attempted." >&2
+                exit 1
+              fi
+              ;;
+            pat) ;;
             *) echo "MARKETPLACE_AUTH must be oidc or pat" >&2; exit 1 ;;
           esac
       - name: Publish with OIDC (no credential fallback)
-        if: env.MARKETPLACE_AUTH == 'oidc'
+        if: env.MARKETPLACE_AUTH == 'oidc' && !inputs.verify_credentials
         env:
           VSIX_PATH: release-package/${{ needs.release.outputs.file }}
         run: npx --no-install vsce publish --oidc --packagePath "$VSIX_PATH"
@@ -125,9 +137,13 @@ jobs:
         env:
           VSIX_PATH: release-package/${{ needs.release.outputs.file }}
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          VERIFY_CREDENTIALS: ${{ inputs.verify_credentials || false }}
         run: |
           if [ -z "$VSCE_PAT" ]; then
             echo "Configure VSCE_PAT in the marketplace environment; no fallback will be attempted." >&2
             exit 1
           fi
-          npx --no-install vsce publish --packagePath "$VSIX_PATH"
+          npx --no-install vsce verify-pat easecation
+          if [ "$VERIFY_CREDENTIALS" != "true" ]; then
+            npx --no-install vsce publish --packagePath "$VSIX_PATH"
+          fi
