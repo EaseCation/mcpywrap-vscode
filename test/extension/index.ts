@@ -100,16 +100,51 @@ export async function run(): Promise<void> {
   // Use real Extension Host APIs; control only human choices for deterministic smoke tests.
   const descriptor = Object.getOwnPropertyDescriptor(vscode.window, 'showQuickPick');
   let chooseHost = false;
+  let chooseServer = false;
   Object.defineProperty(vscode.window, 'showQuickPick', { configurable: true, value: async (items: unknown) => {
-    const values = await Promise.resolve(items) as { session?: { role?: string } }[];
-    return (chooseHost && values.find(item => item.session?.role === 'host')) || values[0];
+    const values = await Promise.resolve(items) as { session?: { role?: string }; side?: string }[];
+    return (chooseServer && values.find(item => item.side === 'server')) || (chooseHost && values.find(item => item.session?.role === 'host')) || values[0];
   } });
   try {
     await vscode.commands.executeCommand('mcpy.newSnippet');
-    assert.equal(vscode.window.activeTextEditor?.document.languageId, 'python');
-    assert.equal(vscode.window.activeTextEditor?.document.uri.scheme, 'untitled', 'snippets use the native scratch editor');
-    const draftResult = await vscode.commands.executeCommand<OperationResult>('mcpy.runSnippet');
+    const scratch = vscode.window.activeTextEditor!.document;
+    assert.equal(scratch.languageId, 'python');
+    assert.equal(scratch.uri.scheme, 'file', 'snippets have a dedicated path without a Save As step');
+    assert.ok(!scratch.uri.fsPath.startsWith(workspace), 'scratch files must stay outside the business workspace');
+    const initial = await readFile(scratch.uri.fsPath, 'utf8');
+    const dirtySource = '# 未保存的游戏片段\nprint("当前内存 🚀")\n1 + 1\n';
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(scratch.uri, new vscode.Range(scratch.positionAt(0), scratch.positionAt(scratch.getText().length)), dirtySource);
+    assert.ok(await vscode.workspace.applyEdit(edit));
+    assert.ok(scratch.isDirty);
+    const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>('vscode.executeCodeLensProvider', scratch.uri);
+    const runLens = lenses?.find(lens => lens.command?.command === 'mcpy.runSnippet')?.command;
+    assert.ok(runLens, 'native editor exposes an unambiguous game execution action');
+    const draftResult = await vscode.commands.executeCommand<OperationResult>(runLens.command, ...runLens.arguments!);
     assert.equal(draftResult?.value, 2);
+    assert.ok(scratch.isDirty, 'game execution must not save editor modifications');
+    assert.equal(await readFile(scratch.uri.fsPath, 'utf8'), initial, 'execution must leave the scratch disk contents untouched');
+    const lastPythonCall = async () => JSON.parse(((await callLog()).split('\n').filter(Boolean).reverse().find(line => {
+      const record = JSON.parse(line); return record.args.includes('py');
+    }))!);
+    const draftCall = await lastPythonCall();
+    assert.equal(draftCall.source, dirtySource, 'CLI must receive the exact current dirty UTF-8 contents');
+    const executionFile = draftCall.args[draftCall.args.indexOf('--file') + 1];
+    assert.notEqual(executionFile, scratch.uri.fsPath, 'execution uses an independent temporary snapshot');
+    await assert.rejects(readFile(executionFile), { code: 'ENOENT' }, 'execution snapshot must be removed after use');
+    chooseServer = true;
+    await vscode.commands.executeCommand('mcpy.changeSnippetTarget', scratch.uri);
+    chooseServer = false;
+    vscode.window.activeTextEditor!.selection = new vscode.Selection(1, 0, 2, 0);
+    await vscode.commands.executeCommand('mcpy.runSnippet', scratch.uri);
+    const selectionCall = await lastPythonCall();
+    assert.equal(selectionCall.source, 'print("当前内存 🚀")\n', 'selected dirty text takes precedence over the full draft');
+    assert.equal(selectionCall.args[selectionCall.args.indexOf('--side') + 1], 'server', 'target change must apply to the same draft');
+    assert.ok(await scratch.save(), 'saving in the dedicated directory remains optional');
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    await vscode.window.showTextDocument(scratch.uri);
+    const reopened = await vscode.commands.executeCommand<OperationResult>('mcpy.runSnippet', scratch.uri);
+    assert.equal(reopened?.value, 2, 'closing and reopening a draft must preserve its game target in the current window');
     const editor = await vscode.window.showTextDocument(document);
     editor.selection = new vscode.Selection(1, 0, 2, 0);
     const executed = await vscode.commands.executeCommand<OperationResult>('mcpy.executeSelection');

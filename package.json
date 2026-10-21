@@ -125,8 +125,8 @@
       },
       {
         "command": "mcpy.runSnippet",
-        "title": "mcpy: 在游戏执行片段",
-        "icon": "$(play)"
+        "title": "mcpy: 在游戏执行（无需保存）",
+        "icon": "$(debug-console)"
       },
       {
         "command": "mcpy.changeSnippetTarget",
@@ -269,8 +269,8 @@
         },
         {
           "command": "mcpy.runSnippet",
-          "when": "resourcePath in mcpy.snippetFiles && resourceScheme == untitled",
-          "group": "navigation@10"
+          "when": "resourcePath in mcpy.snippetFiles && resourceScheme == file && isWorkspaceTrusted",
+          "group": "navigation@0"
         }
       ],
       "mcpy.projectActions": [

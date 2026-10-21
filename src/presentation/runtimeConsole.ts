@@ -24,6 +24,7 @@ export class RuntimeConsole implements vscode.Disposable {
   private readonly queued = { engine: '', script: '' };
   private readonly replayNeeded = new Set<LogPart>();
   private readonly drafts = new Map<string, Draft>();
+  private readonly lensesChanged = new vscode.EventEmitter<void>();
   private readonly status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 40);
   private readonly disposables: vscode.Disposable[] = [];
   private selected?: string;
@@ -31,11 +32,24 @@ export class RuntimeConsole implements vscode.Disposable {
   private disposed = false;
   private timer?: ReturnType<typeof setTimeout>;
   private busy = false;
+  private snippetSequence = 0;
 
-  constructor(private readonly workbench: Workbench) {
+  constructor(private readonly workbench: Workbench, private readonly snippetDirectory: vscode.Uri) {
     this.status.command = 'mcpy.changeSnippetTarget';
     this.disposables.push(vscode.window.onDidChangeActiveTextEditor(() => this.updateDraftContext()),
-      vscode.workspace.onDidCloseTextDocument(document => { this.drafts.delete(document.uri.toString()); this.updateDraftContext(); }));
+      vscode.workspace.onDidCloseTextDocument(() => this.updateDraftContext()),
+      this.lensesChanged,
+      vscode.languages.registerCodeLensProvider({ language: 'python', scheme: 'file' }, {
+        onDidChangeCodeLenses: this.lensesChanged.event,
+        provideCodeLenses: document => {
+          const draft = this.drafts.get(document.uri.toString());
+          const bound = draft ? this.sessions.get(draft.key) : undefined;
+          if (!draft || !bound) return [];
+          const range = new vscode.Range(0, 0, 0, 0);
+          return [new vscode.CodeLens(range, { title: '▶ mcpy: 在游戏执行（无需保存）', command: 'mcpy.runSnippet', arguments: [document.uri] }),
+            new vscode.CodeLens(range, { title: `${bound.target.project.label} · ${memberName(bound.session)} · ${draft.side}`, command: 'mcpy.changeSnippetTarget', arguments: [document.uri] })];
+        }
+      }));
     const command = (name: string, action: (resource?: vscode.Uri) => unknown) => this.disposables.push(vscode.commands.registerCommand(`mcpy.${name}`, async (argument?: unknown) => {
       try { return await action(argument instanceof vscode.Uri ? argument : undefined); }
       catch (reason) { this.report(reason); return undefined; }
@@ -50,7 +64,7 @@ export class RuntimeConsole implements vscode.Disposable {
     command('disconnectLogs', () => this.disconnect());
     command('newSnippet', () => this.openSnippet());
     command('runSnippet', resource => this.runDraft(resource));
-    command('changeSnippetTarget', () => this.changeDraftTarget());
+    command('changeSnippetTarget', resource => this.changeDraftTarget(resource));
   }
   async attach(target: Target, snapshot: Snapshot): Promise<void> {
     const members = target.kind === 'group' ? snapshot.groups.find(group => group.id === target.id)?.members ?? [] : [target.id];
@@ -84,7 +98,7 @@ export class RuntimeConsole implements vscode.Disposable {
         this.updateRuntimeContext();
       });
     }
-    this.updateRuntimeContext(); this.show('script');
+    this.updateRuntimeContext(); this.updateDraftContext(); this.show('script');
   }
   private onLog(target: Target, members: Set<string>, event: LogEvent): void {
     if (this.disposed) return;
@@ -176,16 +190,21 @@ export class RuntimeConsole implements vscode.Disposable {
   async openSnippet(): Promise<void> {
     if (!this.sessions.size) throw new Error('请先启动测试，或连接已有会话日志。');
     const draft = await this.chooseDraft(); if (!draft) return;
-    const document = await vscode.workspace.openTextDocument({ language: 'python', content:
-      '# 运行时 Python：点击右上角运行，或按 Ctrl/⌘+Enter。\n# 目标显示在状态栏；点击状态栏可切换会话和端侧。\n1 + 1\n' });
+    const resource = vscode.Uri.joinPath(this.snippetDirectory, `mcpy-runtime-${++this.snippetSequence}.py`);
+    await vscode.workspace.fs.createDirectory(this.snippetDirectory);
+    await vscode.workspace.fs.writeFile(resource, new TextEncoder().encode(
+      '# 游戏运行时 Python：点击上方 mcpy「在游戏执行」，或按 Ctrl/⌘+Enter。\n' +
+      '# 直接执行当前编辑内容，无需保存；不要使用本机 Python 的运行按钮。\n' +
+      '# 点击上方目标或状态栏可切换会话和端侧。\n1 + 1\n'));
+    const document = await vscode.workspace.openTextDocument(resource);
     this.drafts.set(document.uri.toString(), draft);
-    await vscode.window.showTextDocument(document, { preview: false }); this.updateDraftContext();
+    await vscode.window.showTextDocument(document, { preview: false }); this.updateDraftContext(); this.lensesChanged.fire();
   }
-  private async changeDraftTarget(): Promise<void> {
-    const document = vscode.window.activeTextEditor?.document;
+  private async changeDraftTarget(resource?: vscode.Uri): Promise<void> {
+    const document = resource ? await vscode.workspace.openTextDocument(resource) : vscode.window.activeTextEditor?.document;
     if (!document || !this.drafts.has(document.uri.toString())) return;
     const draft = await this.chooseDraft(); if (draft) this.drafts.set(document.uri.toString(), draft);
-    this.updateDraftContext();
+    this.updateDraftContext(); this.lensesChanged.fire();
   }
   private async runDraft(resource?: vscode.Uri): Promise<OperationResult | undefined> {
     const editor = vscode.window.activeTextEditor;
