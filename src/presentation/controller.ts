@@ -91,6 +91,8 @@ export class WorkbenchController implements vscode.Disposable {
     }), directories.onDidCreate(uri => { void this.onCreatedPath(uri); }),
       vscode.workspace.onDidCreateFiles(event => {
         for (const uri of event.files) if (uri.path.endsWith('/pyproject.toml')) this.onManifestChange(uri);
+      }), vscode.workspace.onDidDeleteFiles(event => {
+        for (const uri of event.files) if (uri.path.endsWith('/pyproject.toml')) this.onManifestChange(uri);
       }));
   }
   get projectCount(): number { return this.projects.length; }

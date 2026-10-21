@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm } from 'node:fs/promises';
 import { OperationResult } from '../../src/domain/model';
 
 export async function run(): Promise<void> {
@@ -39,8 +39,13 @@ export async function run(): Promise<void> {
     while (api.getProjectCount() !== expected && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
     assert.equal(api.getProjectCount(), expected, 'manifest watcher did not update project discovery');
   };
-  await writeFile(path.join(added, 'pyproject.toml'), '[tool.mcpywrap]\n'); await waitForCount(3);
   const manifestUri = vscode.Uri.file(path.join(added, 'pyproject.toml'));
+  const create = new vscode.WorkspaceEdit();
+  create.createFile(manifestUri);
+  create.insert(manifestUri, new vscode.Position(0, 0), '[tool.mcpywrap]\n');
+  assert.ok(await vscode.workspace.applyEdit(create));
+  assert.ok(await (await vscode.workspace.openTextDocument(manifestUri)).save());
+  await waitForCount(3);
   const editManifest = async (source: string) => {
     const manifest = await vscode.workspace.openTextDocument(manifestUri);
     const edit = new vscode.WorkspaceEdit();
@@ -52,7 +57,9 @@ export async function run(): Promise<void> {
   // writes to a freshly created directory; user saves have their own event.
   await editManifest('[project]\nname="ordinary-python"\n'); await waitForCount(2);
   await editManifest('[tool.mcpywrap]\n'); await waitForCount(3);
-  await rm(added, { recursive: true }); await waitForCount(2);
+  const remove = new vscode.WorkspaceEdit(); remove.deleteFile(manifestUri);
+  assert.ok(await vscode.workspace.applyEdit(remove)); await waitForCount(2);
+  await rm(added, { recursive: true });
   assert.equal(await callLog(), beforeNavigation, 'manifest changes must not launch mcpy');
 
   const document = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(workspace, 'project-a', 'logic.py')));
