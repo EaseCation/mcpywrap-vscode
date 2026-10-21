@@ -142,7 +142,7 @@ npm run test:extension
 - Ubuntu、Windows、macOS 上安装锁定依赖，执行检查、测试、构建并生成 VSIX；产物保留 14 天。
 - macOS 上分别使用最低兼容版本 1.95.3 与 stable VS Code 进行隔离宿主测试。
 
-检查 CI 使用只读仓库权限，无需 mcpy、Python、游戏、账号或发布密钥。Marketplace 发行流程会先复用这些检查，再用明确选择的认证方式发布同一份已核验的 VSIX；支持 OIDC，以及管理员显式配置的短期 PAT 过渡方案。账号与自动发布说明见 [RELEASING.md](RELEASING.md)。提交贡献与真机验收方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+检查 CI 使用只读仓库权限，无需 mcpy、Python、游戏、账号或发布密钥。Marketplace 发行流程会先复用这些检查，再用明确选择的认证方式发布同一份已核验的 VSIX；默认采用 Microsoft Entra 工作负载身份联合，每次自动获取短期令牌，无需定期续期 PAT；也保留直接 Marketplace OIDC 和显式 PAT 过渡选项。账号与自动发布说明见 [RELEASING.md](RELEASING.md)。提交贡献与真机验收方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 反馈与许可
 

@@ -2,31 +2,42 @@
 
 扩展标识保持 `easecation.mcpywrap-vscode`。已有 [EaseCation Publisher](https://marketplace.visualstudio.com/publishers/easecation)，应使用该发布者现有管理员的 Microsoft 账号；无需创建第二个 Publisher 或变更扩展 ID。GitHub 组织成员资格不会自动赋予 Marketplace 发布权限。
 
-## 首次账号配置
+## 推荐：Microsoft Entra 联合身份（无长期密钥）
 
-1. 登录 [Publisher 管理页](https://marketplace.visualstudio.com/manage/publishers/easecation)，确认可以管理此 Publisher。
-2. 在 Marketplace 的可信发布配置中，授权以下 GitHub Actions 身份（界面字段以实际账户提供的功能为准）：
+微软官方发布文档推荐 Microsoft Entra ID 与工作负载身份联合。GitHub Actions 使用 `azure/login` 交换本次运行的 OIDC 身份，`vsce publish --azure-credential` 获取 Marketplace 短期访问令牌。每次运行自动获取令牌，不保存 PAT、客户端密钥或证书；无需每隔数月人工续期密码。身份、授权和联合信任本身不会随本次令牌过期，但仍可能被管理员撤销或受组织策略限制。
 
-   | 项目 | 值 |
+一次性配置：
+
+1. 使用已有 **Microsoft Entra 组织租户**创建专用应用注册与企业应用（Service Principal），例如 `mcpywrap-vscode-marketplace`。个人 Microsoft 账号/Marketplace Publisher/Azure DevOps 组织不是 Entra 租户；需要有该租户允许应用注册的权限。此方案只用于 Marketplace，可用 `allow-no-subscriptions: true`，不要求为发布创建付费 Azure 资源，也不授予 Azure 订阅 Contributor。另可使用用户分配的托管身份，但通常需要 Azure 订阅。
+2. 应用注册 → Certificates & secrets → Federated credentials，增加 GitHub Actions 联合信任：
+
+   | 字段 | 值 |
    | --- | --- |
-   | GitHub owner | `EaseCation` |
-   | Repository | `mcpywrap-vscode` |
-   | Workflow | `marketplace.yml` |
-   | GitHub environment | `marketplace` |
-   | Publisher | `easecation` |
+   | Issuer | `https://token.actions.githubusercontent.com` |
+   | GitHub owner / repository | `EaseCation` / `mcpywrap-vscode` |
+   | Entity type / environment | `Environment` / `marketplace` |
+   | Subject | `repo:EaseCation/mcpywrap-vscode:environment:marketplace` |
+   | Audience | `api://AzureADTokenExchange` |
 
-   GitHub OIDC issuer 为 `https://token.actions.githubusercontent.com`，audience 为 `marketplace.visualstudio.com`，environment subject 为 `repo:EaseCation/mcpywrap-vscode:environment:marketplace`。不授权其他仓库或任意工作流。首次上架是否需要先在管理页创建/上传扩展，以账户实际返回为准；未完成真实验证不能将此流程宣称为已上架。
-3. 在 GitHub 仓库配置名为 `marketplace` 的 Environment，将部署来源限制为 `v*` 标签和 `main`（后者用于手动指定已存在标签的发布/验证）。配置完成后设置仓库变量 `MARKETPLACE_PUBLISH_ENABLED=true`，才会在推送发行标签时自动上架。该变量是发布开关，不是凭据；测试与打包不需要它。
+   不创建 Client secret。该信任限定仓库的 marketplace 环境；GitHub Environment 仅允许 `main` 与 `v*` 标签。只有发行工作流的 publish job 有 `id-token: write`；需要进一步限制到特定工作流时可加组织 OIDC claims 策略，不能误认为 environment subject 自带工作流限制。
+3. 把应用的 **Application (client) ID** 和 **Directory (tenant) ID** 分别存到 GitHub 仓库 marketplace Environment 的 `AZURE_CLIENT_ID`、`AZURE_TENANT_ID` Secrets。它们是身份标识，不是会过期的密码；不会创建 `AZURE_CLIENT_SECRET` 或 `VSCE_PAT`。设置仓库变量 `MARKETPLACE_AUTH=entra`（默认也是 entra）。
+4. 运行凭据检查模式。Azure 登录成功后，工作流通过官方 `az rest ... profiles/me --resource 499b84ac-1321-427f-aa17-267ca6975798` 获取 Marketplace profile ID 并写入 job summary。Publisher Owner 在 Members 中将该 ID 以 **Contributor** 角色加入 EaseCation。此 ID 以 Marketplace 实际返回为准，不能用 Entra 应用 ID 或对象 ID 直接替代。首次尚无成员授权时检查失败是预期结果，授权后重新检查。
+5. `vsce verify-pat easecation --azure-credential` 验证该身份可以读取 Publisher 角色；该 CLI 检查 Reader 角色也可能通过，因此仍须在 Members 中核对确实为 Contributor，并通过后续真实版本发布验证上传权限。不要把只读身份检查说成已验证市场写入。
+6. 完成一次真实发行后开启仓库变量 `MARKETPLACE_PUBLISH_ENABLED=true`，新标签就会自动执行检查并发布同一份 VSIX。手动上架的同版本不再通过 CI 重发。
 
-已在现有 Owner 的管理页面核实 Publisher 权限；截至 2026-10-21，该页面尚未显示可信发布配置入口。以下 OIDC 路径已准备并通过离线契约测试，仍需要管理端开放/配置并通过真实发布验证，不能宣称已接通。
+创建应用/联合信任、授予 Contributor 是一次性安全授权，由账号持有人明确授权；不会改变现有 Publisher Owner。
 
-OIDC 使用短期凭据，不需要创建 Azure DevOps PAT 或保存 `VSCE_PAT`。若管理端尚未开放可信发布，可选择微软官方 Microsoft Entra ID 工作负载身份联合方案，或下述显式 PAT 过渡方案；不能假定 GitHub `GITHUB_TOKEN` 可直接发布到 Marketplace。
+## 可选：Marketplace 原生 GitHub OIDC
+
+`vsce publish --oidc` 直接向 Marketplace 交换 GitHub 身份，省去 Entra 中间层。该入口需要 Marketplace 侧可信发布策略；已核实的 Owner 页面截至 2026-10-21 尚未显示配置入口，不能宣称当前账号已接通。设置 `MARKETPLACE_AUTH=oidc` 显式选择此方式，失败不回退其他凭据。
+
+此路径的 audience 为 `marketplace.visualstudio.com`，不同于 Entra 路径的 `api://AzureADTokenExchange`。绑定 GitHub owner `EaseCation`、repository `mcpywrap-vscode`、workflow `marketplace.yml` 和 environment `marketplace`；实际可配置字段以 Marketplace 支持为准。
 
 ### 显式 PAT 过渡方案
 
 现有 Publisher 管理员在 [Azure DevOps](https://dev.azure.com/) 创建仅含 **Marketplace → Manage** 权限的短期 PAT（微软现行文档要求 Organizations 选择 All accessible organizations），仅用于此 Publisher 的发布账号。将它直接保存到 GitHub 仓库 **marketplace Environment** 的 `VSCE_PAT` Secret，不写入仓库、工作流正文或聊天。使用受控发布账号、合理短的有效期，并记录轮换日期。
 
-设置仓库变量 `MARKETPLACE_AUTH=pat` 才会使用此 Secret；默认 `oidc` 不读取 PAT，OIDC 失败也不回退到 PAT。过渡方案仍需管理员实际创建凭据和校验一次发布。切换回 OIDC 时设置 `MARKETPLACE_AUTH=oidc`，并移除不再需要的 Secret。
+设置仓库变量 `MARKETPLACE_AUTH=pat` 才会使用此 Secret；默认 `entra` 不读取 PAT，任何身份失败都不回退到 PAT。过渡方案仍需管理员实际创建凭据和校验一次发布。切换回 OIDC 时设置 `MARKETPLACE_AUTH=oidc`，并移除不再需要的 Secret。
 
 创建 PAT 或给 CI 新增 Publisher 权限属于账号持有人的安全授权操作，必须由持有人确认并完成。首次上架也可由 Owner 在 Marketplace 管理页直接上传已经检查的 VSIX，先完成公开可安装验收。
 
@@ -41,10 +52,10 @@ OIDC 使用短期凭据，不需要创建 Azure DevOps PAT 或保存 `VSCE_PAT`�
 1. 修改 `package.json` 与 `package-lock.json` 的版本，维护 `CHANGELOG.md`，通过 PR 合并 main。
 2. 推送与版本一致的 `vX.Y.Z` 标签。标签必须指向 main 历史上的提交，扩展名称和 Publisher 必须匹配。
 3. `marketplace.yml` 调用现有三平台打包及 VS Code 1.95.3/stable 宿主检查；全部通过后选用 Ubuntu 构建的同一份 VSIX。
-4. 检查 VSIX 内的扩展身份、版本及摘要，然后在 `marketplace` Environment 中使用显式选定的 OIDC 或 PAT 认证发布这份已检查的包。不会在发布时重新打包、自动加版本、跳过重复版本或回退其他认证。
+4. 检查 VSIX 内的扩展身份、版本及摘要，然后在 `marketplace` Environment 中使用显式选定的 Entra、直接 OIDC 或 PAT 认证发布这份已检查的包。不会在发布时重新打包、自动加版本、跳过重复版本或回退其他认证。
 5. 查看工作流和 [Marketplace 条目](https://marketplace.visualstudio.com/items?itemName=easecation.mcpywrap-vscode)。Marketplace 会执行自己的校验与安全扫描，CLI 上传成功不等于已公开可安装；出现问题先查原版本状态，不自动覆盖或重复发布。
 
-已手动上传某版本后，可用 `verify_credentials=true` 对已配置的 PAT 做只读发布权限核验，完成全部构建和包校验后执行 `vsce verify-pat easecation`，绝不上传或重复发布该版本。此模式优先于 publish=true，当前仅支持显式 PAT 认证；OIDC 在未配置真实信任时不会伪装成验证成功。
+已手动上传某版本后，可用 `verify_credentials=true` 对已配置的 Entra/PAT 做只读身份与 Publisher 成员资格核验，绝不上传或重复发布该版本。此模式优先于 publish=true；直接 Marketplace OIDC 在未配置真实信任时不会伪装成验证成功。
 
 ```sh
 gh workflow run marketplace.yml --ref main -f tag=v0.1.4 -f publish=false -f verify_credentials=true
@@ -65,5 +76,6 @@ GitHub Release 可继续分发通用 VSIX，与 Marketplace 是两个独立渠�
 
 - [发布扩展与 Publisher](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
 - [GitHub Actions 自动发布](https://code.visualstudio.com/api/working-with-extensions/continuous-integration#github-actions-automated-publishing)
+- [Azure Login：OIDC 推荐方案](https://github.com/Azure/login#login-with-openid-connect-oidc-recommended)
 - [vsce Trusted publishing](https://github.com/microsoft/vscode-vsce#trusted-publishing)
 - [最终 OIDC 交换协议修复](https://github.com/microsoft/vscode-vsce/commit/c960f2e97da3360899f2bfe93390fa4890c69327)
