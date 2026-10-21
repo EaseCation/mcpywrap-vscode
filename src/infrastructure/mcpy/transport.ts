@@ -20,7 +20,8 @@ export class ProcessTransport implements CliTransport {
       let stderr = '';
       let bytes = 0;
       const child = spawn(options.executable, [...command.args], {
-        cwd: command.project.root, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe']
+        cwd: command.project.root, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
       });
       const fail = (message: string, kind?: 'unavailable' | 'invalidResponse') => {
         if (settled) return;
@@ -49,7 +50,12 @@ export class ProcessTransport implements CliTransport {
         if (bytes > MAX_STDOUT) fail('mcpy 响应超过 8 MiB 上限。', 'invalidResponse');
         else stdout += chunk;
       });
-      child.stderr.on('data', (chunk: string) => { stderr = (stderr + chunk).slice(-MAX_STDERR); });
+      child.stderr.on('data', (chunk: string) => {
+        if (settled) return;
+        stderr = (stderr + chunk).slice(-MAX_STDERR);
+        // Observing diagnostics must never change a submitted operation's outcome.
+        try { command.diagnostic?.(chunk); } catch { /* The final JSON remains authoritative. */ }
+      });
       child.on('close', (code, signal) => {
         if (settled) return;
         let response: unknown;

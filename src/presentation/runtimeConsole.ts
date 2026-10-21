@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { Workbench } from '../application/workbench';
 import { LogSubscription } from '../application/ports';
 import { LogHistory, LogLines, LogPart, LogRecord, logPart, renderRecord } from '../application/logHistory';
-import { LogEvent, LogSource, OperationResult, Session, Side, Snapshot, Target } from '../domain/model';
+import { LogEvent, LogSource, OperationResult, Project, Session, Side, Snapshot, Target } from '../domain/model';
 
 interface BoundSession { key: string; target: Target; session: Session }
 interface Draft { key: string; side: Side }
@@ -163,6 +163,9 @@ export class RuntimeConsole implements vscode.Disposable {
     this.queued[part] = ''; this.replayNeeded.delete(part);
   }
   show(part: LogPart): void { if (!this.disposed) { this.flush(); this.channels[part].show(true); } }
+  startup(project: Project, text: string): void {
+    this.append({ source: 'system', label: `${project.label} · 启动`, text, visible: true });
+  }
   showSnapshot(target: Target, source: LogSource, text: string): void {
     const reader = new LogLines();
     const label = `${target.project.label} · ${target.id.slice(0, 8)} · ${SOURCE_LABEL[source]}快照`;

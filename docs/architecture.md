@@ -74,4 +74,6 @@ LogFollower 端口保持不变，仍由一个长期通用 CLI JSONL 流提供数
 
 RuntimeConsole 使用两个原生 OutputChannel，分别承载引擎（engine/worker/系统消息）与脚本系统（game/Python 结果）。通过独立的 mcpy-log 语言与 TextMate grammar 实现按规则着色。palette 只为本语言的专用 scope 提供默认值，允许用户和主题覆盖；不调用 settings.update。搜索、复制、清空、自动滚动使用原生输出器。
 
+启动诊断通过可选回调从 ProcessTransport 的 stderr 经 CliGateway/Workbench 传递，保持最终 stdout JSON 与变更结果语义不变；诊断观察器失败不改变命令结果。子进程使用 UTF-8 输出。StartupFeedback 在应用层按 CR/LF 分帧、去除终端控制序列、限制长行并格式化耗时，展示层以每个启动请求一个轻量计时器刷新原生通知与引擎输出。半行最多等待一个计时周期，启动命令成功后切换到查询/订阅阶段；所有结束路径释放计时器。此路径不扫描工作区、轮询 CLI、解析人类诊断中的会话 ID 或读私有文件。
+
 Python 片段在 ExtensionContext.storageUri（无工作区时回退 globalStorageUri）的 snippets/ 中创建命名 `.py` 文件，使用原生 Python 编辑器、QuickPick、CodeLens、编辑器标题命令、状态栏与快捷键。片段目录由组合根注入；创建时写入初始内容，编辑和执行不自动保存。绑定按文档 URI 在窗口内存中保留，关闭再打开仍可使用，窗口重载不恢复执行目标。CodeLens 只做 URI 内存查表，不扫描或调用 CLI。执行捕获 TextDocument.getText 的内存快照，复用 Workbench.execute、能力检查与一次性 UTF-8 临时文件，完成或失败后清理该临时文件；不创建 HTML、Webview、伪终端或自定义输入控件。关闭草稿保留已连接的游戏与日志。

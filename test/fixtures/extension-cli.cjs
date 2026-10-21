@@ -36,4 +36,22 @@ else if (verb === 'runtime' && args.includes('capabilities')) result = {
 else if (verb === 'runtime') result = { ok: true, state: 'completed', stdout: 'fixture stdout', value: 2 };
 else if (verb === 'logs') result = { ok: true, text: 'fixture game log\n', logs: [{ role: 'host', session: 'host-session', text: 'host log' }] };
 else if (verb === 'doctor') result = { ok: true, state: 'ready', hint: 'contract fixture only' };
-process.stdout.write(JSON.stringify(result));
+const barrier = process.env.MCPY_FIXTURE_START_BARRIER;
+if (verb === 'status' && barrier && fs.existsSync(barrier) && fs.readFileSync(barrier, 'utf8') === 'query-fail') {
+  result = { ok: false, error: 'fixture 会话查询失败' }; process.exitCode = 1;
+}
+const writeResult = () => {
+  if (verb === 'run' && !args.includes('--list') && barrier && fs.readFileSync(barrier, 'utf8') === 'fail') {
+    result = { ok: false, error: 'fixture 启动失败', hint: '检查运行环境，不重复启动。' };
+    process.exitCode = 1;
+  }
+  process.stdout.write(JSON.stringify(result));
+};
+if (verb === 'run' && !args.includes('--list')) {
+  process.stderr.write('获取版本信息 fixture 中文\n下载／提取：1.0 / 2.0 MiB\r[script] before_run\n准备中 fixture（没有换行）');
+  if (barrier && !fs.existsSync(barrier)) {
+    const timer = setInterval(() => { if (fs.existsSync(barrier)) { clearInterval(timer); writeResult(); } }, 20);
+    return;
+  }
+}
+writeResult();

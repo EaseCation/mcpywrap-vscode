@@ -18,6 +18,22 @@ test('UTF-8 characters split across chunks survive; stderr is separate', async (
   const result = await transport().request({ project, args: [fixture, 'unicode'], mutation: false });
   assert.equal(result.text, '中文 · 世界 🌍');
 });
+test('startup diagnostics arrive before final JSON and keep split UTF-8 intact', async () => {
+  let returned = false, first!: () => void;
+  const available = new Promise<void>(resolve => { first = resolve; });
+  const chunks: string[] = [];
+  const waiting = transport().request({ project, args: [fixture, 'progress'], mutation: true,
+    diagnostic: text => { chunks.push(text); first(); } }).then(result => { returned = true; return result; });
+  await available;
+  assert.equal(returned, false, 'startup diagnostics must be observable while the request is pending');
+  assert.equal((await waiting).state, 'running');
+  assert.equal(chunks.join(''), '下载／提取：中文 🌍\n[script] before_run\n');
+});
+test('a broken diagnostic observer cannot turn a successful mutation into unknown', async () => {
+  const result = await transport().request({ project, args: [fixture, 'progress'], mutation: true,
+    diagnostic: () => { throw new Error('view was closed'); } });
+  assert.equal(result.ok, true);
+});
 test('nonzero explicit CLI failure keeps structured data', async () => {
   const result = await transport().request({ project, args: [fixture, 'failed'], mutation: true });
   assert.equal(result.ok, false); assert.equal(result.code, 'busy');

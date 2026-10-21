@@ -14,5 +14,15 @@ else if (mode === 'unicode') {
     process.stdout.write(data.subarray(index, index + 1));
     if (++index === data.length) clearInterval(timer);
   }, 1);
+} else if (mode === 'progress') {
+  const data = Buffer.from('下载／提取：中文 🌍\n[script] before_run\n');
+  let index = 0;
+  const timer = setInterval(() => {
+    process.stderr.write(data.subarray(index, ++index));
+    if (index === data.length) {
+      clearInterval(timer);
+      setTimeout(() => process.stdout.write(JSON.stringify({ ok: true, state: 'running' })), 30);
+    }
+  }, 1);
 } else if (mode === 'overflow') process.stdout.write('x'.repeat(9 * 1024 * 1024));
 else process.stdout.write(JSON.stringify({ ok: true, args, cwd: process.cwd() }));

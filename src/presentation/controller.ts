@@ -4,6 +4,7 @@ import { Workbench } from '../application/workbench';
 import { OperationResult, Project, Session, Side, Target, ToolFailure } from '../domain/model';
 import { WorkspaceNode, WorkspaceTree } from './tree';
 import { RuntimeConsole } from './runtimeConsole';
+import { StartupFeedback } from '../application/startupFeedback';
 
 const EXCLUDED_DIRECTORIES = ['.git', '.mcpy', '.runtime', '.venv', 'venv', 'env', 'node_modules',
   'build', 'dist', 'out', 'outputs', '__pycache__', '.cache', '.local', '.local-notes', '.vscode-test'];
@@ -24,6 +25,8 @@ export class WorkbenchController implements vscode.Disposable {
   private discoveredRevision = -1;
   private discoveryTimer?: ReturnType<typeof setTimeout>;
   private disposed = false;
+  private readonly startups = new Set<() => void>();
+  private readonly startingProjects = new Set<string>();
 
   constructor(private readonly workbench: Workbench, private readonly discovery: ProjectDiscovery,
     private readonly unsupportedReason?: string, private readonly consolePanel?: RuntimeConsole) {
@@ -254,12 +257,49 @@ export class WorkbenchController implements vscode.Disposable {
   private async run(node?: WorkspaceNode, newWorld = false, clients: 1 | 2 = 1): Promise<OperationResult | undefined> {
     const project = await this.pickProject(node); if (!project) return undefined;
     const world = node?.kind === 'world' && !newWorld ? node.value?.id : undefined;
-    const result = await this.progress(`运行测试 · ${project.label}`, () => this.workbench.start(project, { world, newWorld, clients }));
-    this.showResult('运行测试', { project, id: result.group ?? result.session ?? '', kind: result.group ? 'group' : 'session' }, result);
-    await this.refreshProject(project);
-    const snapshot = this.tree.states.get(project.id)?.snapshot;
-    if (snapshot && this.consolePanel) await this.consolePanel.attach({ project, id: result.group ?? result.session!, kind: result.group ? 'group' : 'session' }, snapshot);
-    return result;
+    if (this.startingProjects.has(project.id)) {
+      this.consolePanel?.show('engine');
+      void vscode.window.showInformationMessage(`${project.label} 的启动请求仍在等待结果，请查看引擎输出。`);
+      return undefined;
+    }
+    this.startingProjects.add(project.id);
+    try {
+      return await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification,
+        title: `运行测试 · ${project.label}`, cancellable: false }, async progress => {
+        const write = (text: string) => {
+          if (this.disposed) return;
+          if (this.consolePanel) this.consolePanel.startup(project, text);
+          else this.output.append(text);
+        };
+        write(`\n[+] 请求启动${clients === 2 ? '双客户端测试' : newWorld ? '新建测试世界' : '测试'}${world ? ` · 世界 ${world}` : ''}\n项目：${project.root}\n`);
+        const feedback = new StartupFeedback({ log: write, status: message => { if (!this.disposed) progress.report({ message }); } });
+        if (this.consolePanel) this.consolePanel.show('engine'); else this.output.show(true);
+        const timer = setInterval(() => feedback.tick(), 1000);
+        const cleanup = () => { clearInterval(timer); feedback.dispose(); this.startups.delete(cleanup); };
+        this.startups.add(cleanup);
+        let started: OperationResult | undefined;
+        try {
+          const result = started = await this.workbench.start(project, { world, newWorld, clients }, text => feedback.diagnostic(text));
+          const target: Target = { project, id: result.group ?? result.session!, kind: result.group ? 'group' : 'session' };
+          feedback.stage(`mcpy 已返回：${result.state} · ${target.kind} ${target.id}；正在查询会话并连接日志。`);
+          this.showResult('运行测试', target, result);
+          await this.refreshProject(project);
+          const state = this.tree.states.get(project.id);
+          if (state?.snapshot && !state.error && this.consolePanel) {
+            await this.consolePanel.attach(target, state.snapshot);
+            feedback.finish('[+] 已发起会话日志订阅，可在来源下拉框切换引擎和脚本系统。');
+          } else {
+            feedback.finish(`[!] 启动命令已返回，但会话日志尚未连接${state?.error ? `：${state.error}` : ''}。请刷新项目后使用“连接会话日志”，不要重复启动。`);
+            this.consolePanel?.show('engine');
+          }
+          return result;
+        } catch (error) {
+          const label = started ? '启动命令已返回，但会话日志未连接' : error instanceof ToolFailure && error.kind === 'unknown' ? '启动结果未知' : '启动失败';
+          feedback.finish(`[!] ${label}：${error instanceof Error ? error.message : String(error)}${error instanceof ToolFailure && error.hint ? `\n${error.hint}` : ''}${started ? '\n请刷新项目后连接已有会话，不要重复启动。' : ''}`);
+          this.reportError(error); this.consolePanel?.show('engine'); return started;
+        } finally { cleanup(); }
+      });
+    } finally { this.startingProjects.delete(project.id); }
   }
   private async openConsole(node?: WorkspaceNode): Promise<void> {
     const target = await this.pickManagementTarget(node);
@@ -354,6 +394,8 @@ export class WorkbenchController implements vscode.Disposable {
   private clearSelection(): void { this.selected = undefined; this.status.text = '$(beaker) mcpy · 选择目标'; this.status.tooltip = undefined; }
   dispose(): void {
     this.disposed = true;
+    for (const cleanup of [...this.startups]) cleanup();
+    this.startingProjects.clear();
     if (this.discoveryTimer) clearTimeout(this.discoveryTimer);
     void vscode.commands.executeCommand('setContext', 'mcpy.activeProject', false);
     void vscode.commands.executeCommand('setContext', 'mcpy.projectFiles', []);

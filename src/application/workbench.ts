@@ -12,9 +12,9 @@ export class Workbench {
   capabilities(target: Target): Promise<Capabilities> { return this.tools.capabilities(target); }
   diagnose(project: Project): Promise<OperationResult> { return this.tools.diagnose(project); }
   logs(target: Target, source: 'game' | 'engine' | 'worker'): Promise<string> { return this.tools.logs(target, source); }
-  start(project: Project, options: { world?: string; newWorld?: boolean; clients?: 1 | 2 }): Promise<OperationResult> {
+  start(project: Project, options: { world?: string; newWorld?: boolean; clients?: 1 | 2 }, diagnostic?: (text: string) => void): Promise<OperationResult> {
     if (options.world && options.newWorld) throw new ToolFailure('rejected', '已有世界与新建世界不能同时选择。');
-    return this.mutate(project, () => this.tools.start(project, options));
+    return this.mutate(project, () => this.tools.start(project, options, diagnostic));
   }
   stop(target: Target): Promise<OperationResult> { return this.mutate(target.project, () => this.tools.stop(target)); }
   execute(target: Target, side: Side, code: string): Promise<OperationResult> {

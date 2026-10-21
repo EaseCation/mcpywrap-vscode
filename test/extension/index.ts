@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { OperationResult } from '../../src/domain/model';
 
 export async function run(): Promise<void> {
@@ -68,7 +68,21 @@ export async function run(): Promise<void> {
 
   const document = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(workspace, 'project-a', 'logic.py')));
   await vscode.window.showTextDocument(document);
-  const routed = await vscode.commands.executeCommand<OperationResult>('mcpy.run', vscode.Uri.file(path.join(workspace, 'project-b/pyproject.toml')));
+  let startupReturned = false;
+  const clicked = vscode.Uri.file(path.join(workspace, 'project-b/pyproject.toml'));
+  const launching = vscode.commands.executeCommand<OperationResult>('mcpy.run', clicked).then(result => { startupReturned = true; return result; });
+  try {
+    const deadline = Date.now() + 15000;
+    while (!api.getRuntimeState().displayed.engine.includes('准备中 fixture（没有换行）') && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
+    const output = api.getRuntimeState().displayed.engine;
+    assert.ok(output.includes('获取版本信息 fixture 中文') && output.includes('准备中 fixture（没有换行）'), 'native engine output must show complete and partial stderr before startup returns');
+    assert.ok(output.includes('project-b · 启动'), 'startup diagnostics must label the clicked project');
+    assert.equal(startupReturned, false, 'the fake CLI is deliberately held before its final JSON');
+    await vscode.commands.executeCommand('mcpy.run', clicked);
+    const pendingCalls = (await callLog()).split('\n').map(line => JSON.parse(line));
+    assert.equal(pendingCalls.length, 1, 'waiting and duplicate clicks must not spawn extra CLI queries or starts');
+  } finally { await writeFile(process.env.MCPY_FIXTURE_START_BARRIER!, 'ready'); }
+  const routed = await launching;
   assert.equal(routed?.session, 'solo-session', 'title command must accept the clicked editor URI even when another project is active');
   const started = await vscode.commands.executeCommand<OperationResult>('mcpy.run');
   assert.equal(started?.session, 'solo-session');
@@ -157,5 +171,16 @@ export async function run(): Promise<void> {
   } finally {
     if (descriptor) Object.defineProperty(vscode.window, 'showQuickPick', descriptor);
   }
+  await writeFile(process.env.MCPY_FIXTURE_START_BARRIER!, 'query-fail');
+  const knownStart = await vscode.commands.executeCommand<OperationResult>('mcpy.run', clicked);
+  assert.equal(knownStart?.session, 'solo-session', 'a failed follow-up query must not erase the confirmed start result');
+  assert.ok(api.getRuntimeState().displayed.engine.includes('启动命令已返回，但会话日志尚未连接'));
+  await writeFile(process.env.MCPY_FIXTURE_START_BARRIER!, 'fail');
+  const failed = await vscode.commands.executeCommand('mcpy.run', clicked);
+  assert.equal(failed, undefined);
+  assert.ok(api.getRuntimeState().displayed.engine.includes('fixture 启动失败'), 'failed startup leaves its actual error in the engine output');
+  const callsAfterFailure = await callLog();
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  assert.equal(await callLog(), callsAfterFailure, 'failed startup must not retry or poll');
   console.log('Extension Host: activation, multi-project discovery, start, Python, reload and log snapshot passed.');
 }

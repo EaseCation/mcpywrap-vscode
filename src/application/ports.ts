@@ -2,7 +2,7 @@ import { Capabilities, LogEvent, OperationResult, Project, Side, Snapshot, Targe
 
 export interface McpyGateway {
   inspect(project: Project): Promise<Snapshot>;
-  start(project: Project, options: { world?: string; newWorld?: boolean; clients?: 1 | 2 }): Promise<OperationResult>;
+  start(project: Project, options: { world?: string; newWorld?: boolean; clients?: 1 | 2 }, diagnostic?: (text: string) => void): Promise<OperationResult>;
   stop(target: Target): Promise<OperationResult>;
   capabilities(target: Target): Promise<Capabilities>;
   execute(target: Target, side: Side, code: string): Promise<OperationResult>;
@@ -18,6 +18,7 @@ export interface ProjectDiscovery {
 }
 export interface CliRequest {
   readonly project: Project; readonly args: readonly string[]; readonly mutation: boolean;
+  readonly diagnostic?: (text: string) => void;
 }
 export interface CliTransport { request(command: CliRequest): Promise<Record<string, unknown>> }
 export interface TemporarySource { withFile<T>(code: string, action: (file: string) => Promise<T>): Promise<T> }

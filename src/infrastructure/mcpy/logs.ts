@@ -23,7 +23,8 @@ export class CliLogFollower implements LogFollower {
   follow(target: Target, event: (event: LogEvent) => void, error: (error: Error) => void): LogSubscription {
     const request = commands.follow(target);
     const child = spawn(this.options(target.project.root).executable, [...request.args], {
-      cwd: target.project.root, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe']
+      cwd: target.project.root, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
     });
     let buffer = '', stderr = '', disposed = false, ended = false, failed = false;
     const fail = (message: string) => {

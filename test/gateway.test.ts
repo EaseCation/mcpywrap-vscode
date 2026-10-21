@@ -4,6 +4,7 @@ import { CliRequest, CliTransport, TemporarySource } from '../src/application/po
 import { Project, Target, ToolFailure } from '../src/domain/model';
 import { commands } from '../src/infrastructure/mcpy/commands';
 import { CliGateway } from '../src/infrastructure/mcpy/gateway';
+import { Workbench } from '../src/application/workbench';
 
 const project: Project = { id: 'a', root: '/space and 中文/project', label: 'a' };
 const session: Target = { project, id: 's1', kind: 'session' };
@@ -14,6 +15,17 @@ class FixtureTransport implements CliTransport {
   constructor(private readonly reply: (command: CliRequest) => Record<string, unknown>) {}
   async request(command: CliRequest) { this.calls.push(command); return this.reply(command); }
 }
+test('start forwards diagnostics through the application without polling or changing CLI arguments', async () => {
+  const wire = new FixtureTransport(command => {
+    command.diagnostic?.('正在准备资源\n');
+    return { ok: true, session: 's1', state: 'running' };
+  });
+  const messages: string[] = [];
+  const result = await new Workbench(new CliGateway(wire, source)).start(project, {}, text => messages.push(text));
+  assert.equal(result.session, 's1'); assert.deepEqual(messages, ['正在准备资源\n']);
+  assert.equal(wire.calls.length, 1);
+  assert.deepEqual(wire.calls[0]?.args, commands.start(project, {}).args);
+});
 test('commands are one-way public CLI calls with explicit route, root and JSON', () => {
   assert.deepEqual(commands.start(project, { world: 'world-id', clients: 2 }).args, [
     '--local', '--project', project.root, '--non-interactive', 'run', 'world-id',

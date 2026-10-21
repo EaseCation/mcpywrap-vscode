@@ -60,8 +60,8 @@ export class CliGateway implements McpyGateway {
     } catch (error) { issues.push(`世界列表查询失败：${error instanceof Error ? error.message : String(error)}`); }
     return { sessions, groups, worlds: instances, issues };
   }
-  async start(project: Project, options: { world?: string; newWorld?: boolean; clients?: 1 | 2 }): Promise<OperationResult> {
-    const data = success(await this.transport.request(commands.start(project, options)));
+  async start(project: Project, options: { world?: string; newWorld?: boolean; clients?: 1 | 2 }, diagnostic?: (text: string) => void): Promise<OperationResult> {
+    const data = success(await this.transport.request({ ...commands.start(project, options), diagnostic }));
     if ((!text(data.session) && !text(data.group)) || !text(data.state)) {
       throw new ToolFailure('unknown', '启动响应缺少会话/组 ID 或状态。', '刷新同一项目找回会话，不重复新建。', data);
     }

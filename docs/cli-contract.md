@@ -4,7 +4,7 @@
 
 ## 1. 调用规则
 
-使用可执行文件与 argv 数组，shell=false，cwd 为明确项目。全局前缀为 `--local --project <absolute-root> --non-interactive`。有限命令末尾 `--json`；stdout 解析为单个 JSON 对象，stderr 只作为诊断，不混入 JSON。显式 --local 覆盖用户环境中的远端设置；首版仅支持本机。
+使用可执行文件与 argv 数组，shell=false，cwd 为明确项目，子进程 PYTHONIOENCODING=utf-8。全局前缀为 `--local --project <absolute-root> --non-interactive`。有限命令末尾 `--json`；stdout 解析为单个 JSON 对象，stderr 只作为诊断，不混入 JSON。启动请求可实时转发诊断给界面，不将诊断文字作为阶段、百分比或会话身份协议。显式 --local 覆盖用户环境中的远端设置；首版仅支持本机。
 
 可执行文件设置不是 shell 命令，不支持附带参数。相对工具名通过 PATH 查找；绝对路径可含空格和 Unicode。扩展不自动安装、更新、降级 mcpy。
 
@@ -49,4 +49,4 @@ spawn 失败为未提交。已 spawn 的变更命令发生超时、非 JSON、�
 
 `logs --session/--group ID --follow --source all --format jsonl --tail 100` 为长期命令，不带 --json。每行独立对象：schema_version=1，event=log/state/reset/end。log 含 session/source/text，可选 role；state 含 session/state；reset 含 session/source；end 表示所有成员结束且日志排空。text 可以是半行。插件验证身份必须属于已绑定目标，限制单帧和缓冲区，断开仅关闭订阅。
 
-此能力在 mcpy 0.5.2 基线后新增；以命令是否支持为准，旧版本明确报能力缺失并提示更新，不访问内部日志文件兜底。
+此能力从 mcpy 0.5.5 正式发布；以命令是否支持为准，旧版本明确报能力缺失并提示更新，不访问内部日志文件兜底。
