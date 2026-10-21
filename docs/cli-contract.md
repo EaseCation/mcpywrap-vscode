@@ -52,3 +52,10 @@ spawn 失败为未提交。已 spawn 的变更命令发生超时、非 JSON、�
 `logs --session/--group ID --follow --source all --format jsonl --tail 100` 为长期命令，不带 --json。每行独立对象：schema_version=1，event=log/state/reset/end。log 含 session/source/text，可选 role；state 含 session/state；reset 含 session/source；end 表示所有成员结束且日志排空。text 可以是半行。插件验证身份必须属于已绑定目标，限制单帧和缓冲区，断开仅关闭订阅。
 
 此能力从 mcpy 0.5.5 正式发布；以命令是否支持为准，旧版本明确报能力缺失并提示更新，不访问内部日志文件兜底。
+
+## 7. ModSDK 开发环境（mcpy 0.5.7+）
+
+- `modsdk --list --json` 返回 versions[]，用户显式选择与游戏相符的 SDK 构建版本。
+- `modsdk --inspect --python ABSOLUTE_EXECUTABLE --json` 返回 environment（invocation/executable/prefix/base_prefix/version/identity/purelib/platlib）和 installed（缺失时 null，否则 version/location/in_environment）。只读、无网络，不导入 SDK。
+- `modsdk --version VERSION --python ABSOLUTE_EXECUTABLE --expected-environment IDENTITY --json` 定向安装，返回核验后的相同结构。identity 是只读检查获得的不透明指纹，安装前后核验，不能由扩展推导。外部环境保护/权限/网络失败不降级为其他安装目标。
+- Python 路径保持调用路径，禁止 realpath 虚拟环境 Python 链接。CLI 内部拥有包下载、Python 3 兼容和 pip 安装逻辑。旧 CLI 不支持参数时提示升级，无旧安装方式回退。

@@ -2,7 +2,7 @@
   "name": "mcpywrap-vscode",
   "displayName": "mcpywrap — 游戏测试工作区",
   "description": "在 VS Code 中通过 mcpy CLI 管理 Minecraft 中国版测试会话、执行 Python 与热更模块。",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "easecation",
   "repository": {
     "type": "git",
@@ -133,6 +133,11 @@
         "command": "mcpy.changeSnippetTarget",
         "title": "mcpy: 切换片段执行目标",
         "icon": "$(server-process)"
+      },
+      {
+        "command": "mcpy.developmentEnvironment",
+        "title": "mcpy: Python 开发环境与补全",
+        "icon": "$(package)"
       }
     ],
     "configuration": {
@@ -238,6 +243,11 @@
           "command": "mcpy.console",
           "when": "view == mcpy.sessions && viewItem =~ /^mcpy\\.(session|group)$/",
           "group": "inline@0"
+        },
+        {
+          "command": "mcpy.developmentEnvironment",
+          "when": "view == mcpy.sessions && viewItem == mcpy.project",
+          "group": "3_tools@1"
         }
       ],
       "editor/context": [
@@ -319,6 +329,10 @@
         {
           "command": "mcpy.doctor",
           "group": "3_tools@1"
+        },
+        {
+          "command": "mcpy.developmentEnvironment",
+          "group": "3_tools@0"
         }
       ]
     },
@@ -468,5 +482,9 @@
     "typescript": "^5.9.0",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"
-  }
+  },
+  "extensionPack": [
+    "ms-python.python",
+    "ms-python.vscode-pylance"
+  ]
 }

@@ -45,10 +45,15 @@ try {
       vscodeExecutablePath = path.join(path.dirname(vscodeExecutablePath), binary);
     }
   }
+  const pythonFixture = path.join(temporary, 'python-extension');
+  await mkdir(pythonFixture);
+  await writeFile(path.join(pythonFixture, 'package.json'), JSON.stringify({ name: 'python', publisher: 'ms-python', version: '0.0.0',
+    engines: { vscode: '^1.95.0' }, main: './extension.cjs', activationEvents: ['onCommand:mcpyFixture.changePython'] }));
+  await writeFile(path.join(pythonFixture, 'extension.cjs'), await readFile(path.join(root, 'test/fixtures/python-extension.cjs')));
   await runTests({
     version,
     vscodeExecutablePath,
-    extensionDevelopmentPath: root,
+    extensionDevelopmentPath: [root, pythonFixture],
     extensionTestsPath: path.join(root, '.test-build/test/extension/index.js'),
     extensionTestsEnv: { MCPY_FIXTURE_LOG: log, MCPY_FIXTURE_WORKSPACE: workspace,
       MCPY_FIXTURE_START_BARRIER: path.join(temporary, 'allow-start'), MCPY_FIXTURE_PY_BARRIER: path.join(temporary, 'allow-python') },
