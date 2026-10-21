@@ -87,6 +87,11 @@
       {
         "command": "mcpy.configure",
         "title": "mcpy: 配置 CLI 路径"
+      },
+      {
+        "command": "mcpy.console",
+        "title": "mcpy: 打开运行时控制台",
+        "icon": "$(terminal)"
       }
     ],
     "configuration": {
@@ -123,6 +128,13 @@
           "title": "游戏测试",
           "icon": "media/game.svg"
         }
+      ],
+      "panel": [
+        {
+          "id": "mcpy.runtime",
+          "title": "游戏测试",
+          "icon": "media/game.svg"
+        }
       ]
     },
     "views": {
@@ -130,6 +142,13 @@
         {
           "id": "mcpy.sessions",
           "name": "测试工作区"
+        }
+      ],
+      "mcpy.runtime": [
+        {
+          "type": "webview",
+          "id": "mcpy.console",
+          "name": "日志与 Python"
         }
       ]
     },
@@ -167,6 +186,11 @@
           "command": "mcpy.stop",
           "when": "view == mcpy.sessions && viewItem =~ /^mcpy\\.(session|group)$/",
           "group": "inline@2"
+        },
+        {
+          "command": "mcpy.console",
+          "when": "view == mcpy.sessions && viewItem =~ /^mcpy\\.(session|group)$/",
+          "group": "inline@0"
         }
       ],
       "editor/context": [
@@ -206,6 +230,10 @@
         {
           "command": "mcpy.runTwoClients",
           "group": "1_run@2"
+        },
+        {
+          "command": "mcpy.console",
+          "group": "2_session@0"
         },
         {
           "command": "mcpy.logs",

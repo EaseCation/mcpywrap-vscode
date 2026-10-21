@@ -1,9 +1,13 @@
-import { Capabilities, OperationResult, Project, Session, Side, Snapshot, Target, ToolFailure } from '../domain/model';
-import { McpyGateway } from './ports';
+import { Capabilities, LogEvent, OperationResult, Project, Session, Side, Snapshot, Target, ToolFailure } from '../domain/model';
+import { LogFollower, LogSubscription, McpyGateway } from './ports';
 
 export class Workbench {
   private readonly busy = new Set<string>();
-  constructor(private readonly tools: McpyGateway) {}
+  constructor(private readonly tools: McpyGateway, private readonly logsFollower?: LogFollower) {}
+  followLogs(target: Target, event: (event: LogEvent) => void, error: (error: Error) => void): LogSubscription {
+    if (!this.logsFollower) throw new ToolFailure('unavailable', '增量日志客户端不可用。');
+    return this.logsFollower.follow(target, event, error);
+  }
   inspect(project: Project): Promise<Snapshot> { return this.tools.inspect(project); }
   capabilities(target: Target): Promise<Capabilities> { return this.tools.capabilities(target); }
   diagnose(project: Project): Promise<OperationResult> { return this.tools.diagnose(project); }

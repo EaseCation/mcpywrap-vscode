@@ -37,10 +37,16 @@ spawn 失败为未提交。已 spawn 的变更命令发生超时、非 JSON、�
 
 ## 4. 当前缺口与通用能力提案
 
-当前没有 cursor/follow 日志、watch JSON 事件、项目 inspect、通用 debug metadata 和部署源码映射。它们均不属于本扩展假设的现有接口。
+已增加通用 follow 日志；当前没有可恢复 cursor、watch JSON 事件、项目 inspect、通用 debug metadata 和部署源码映射。它们均不属于本扩展假设的现有接口。
 
 未来可向 mcpy 提出通用能力：带 schema_version 的项目/会话查询、cursor 日志事件、稳定 action/request 标识、debug endpoint 与侧别、按部署 fingerprint 绑定的源码/行号映射。CLI、Qt、Agent 与其他编辑器应能共同使用这些能力，不能命名为 vscode 专用协议。
 
 ## 5. 契约验证
 
 独立 fake CLI 在不安装 mcpy/Python 的情况下验证参数与 JSON。实际 mcpy 的只读验证仅使用版本、帮助和已选测试工程的 status/list，不启动游戏。真机验收另行验证指定版本的游戏执行效果，不从帮助或 mock 推断。
+
+## 6. 本机增量日志协议
+
+`logs --session/--group ID --follow --source all --format jsonl --tail 100` 为长期命令，不带 --json。每行独立对象：schema_version=1，event=log/state/reset/end。log 含 session/source/text，可选 role；state 含 session/state；reset 含 session/source；end 表示所有成员结束且日志排空。text 可以是半行。插件验证身份必须属于已绑定目标，限制单帧和缓冲区，断开仅关闭订阅。
+
+此能力在 mcpy 0.5.2 基线后新增；以命令是否支持为准，旧版本明确报能力缺失并提示更新，不访问内部日志文件兜底。

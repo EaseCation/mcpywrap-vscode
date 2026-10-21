@@ -18,5 +18,9 @@ export const commands = {
   reload: (t: Target, side: Side, file: string) => command(t.project,
     ['runtime', 'reload', 'python', ...targetArgs(t), '--side', side, '--file', file], true),
   logs: (t: Target, source: string) => command(t.project, ['logs', ...targetArgs(t), '--source', source, '--tail', '300']),
+  follow: (t: Target): CliRequest => {
+    const request = command(t.project, ['logs', ...targetArgs(t), '--follow', '--source', 'all', '--format', 'jsonl', '--tail', '100']);
+    return { ...request, args: request.args.slice(0, -1) };
+  },
   doctor: (p: Project) => command(p, ['doctor'])
 };

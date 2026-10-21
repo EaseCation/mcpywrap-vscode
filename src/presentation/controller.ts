@@ -3,6 +3,7 @@ import { ProjectDiscovery } from '../application/ports';
 import { Workbench } from '../application/workbench';
 import { OperationResult, Project, Session, Side, Target, ToolFailure } from '../domain/model';
 import { WorkspaceNode, WorkspaceTree } from './tree';
+import { RuntimeConsole } from './runtimeConsole';
 
 const EXCLUDED_DIRECTORIES = ['.git', '.mcpy', '.runtime', '.venv', 'venv', 'env', 'node_modules',
   'build', 'dist', 'out', 'outputs', '__pycache__', '.cache', '.local', '.local-notes', '.vscode-test'];
@@ -26,7 +27,7 @@ export class WorkbenchController implements vscode.Disposable {
   private disposed = false;
 
   constructor(private readonly workbench: Workbench, private readonly discovery: ProjectDiscovery,
-    private readonly unsupportedReason?: string) {
+    private readonly unsupportedReason?: string, private readonly consolePanel?: RuntimeConsole) {
     this.status.text = '$(beaker) mcpy · 选择目标';
     this.status.command = 'mcpy.selectTarget'; this.status.show();
     this.disposables.push(vscode.window.createTreeView('mcpy.sessions', { treeDataProvider: this.tree }));
@@ -51,6 +52,7 @@ export class WorkbenchController implements vscode.Disposable {
     register('runTwoClients', node => this.run(node, false, 2));
     register('stop', node => this.stop(node));
     register('logs', node => this.logs(node));
+    register('console', node => this.openConsole(node));
     register('selectTarget', async node => { await this.pickPythonTarget(await this.pickProject(node)); });
     register('executeSelection', (node, resource) => this.executeSelection(node, resource));
     register('reloadFile', (node, resource) => this.reloadFile(node, resource));
@@ -253,7 +255,16 @@ export class WorkbenchController implements vscode.Disposable {
     const world = node?.kind === 'world' && !newWorld ? node.value?.id : undefined;
     const result = await this.progress(`运行测试 · ${project.label}`, () => this.workbench.start(project, { world, newWorld, clients }));
     this.showResult('运行测试', { project, id: result.group ?? result.session ?? '', kind: result.group ? 'group' : 'session' }, result);
-    await this.refreshProject(project); return result;
+    await this.refreshProject(project);
+    const snapshot = this.tree.states.get(project.id)?.snapshot;
+    if (snapshot && this.consolePanel) await this.consolePanel.attach({ project, id: result.group ?? result.session!, kind: result.group ? 'group' : 'session' }, snapshot);
+    return result;
+  }
+  private async openConsole(node?: WorkspaceNode): Promise<void> {
+    const target = await this.pickManagementTarget(node);
+    if (!target || !this.consolePanel) return;
+    const snapshot = this.tree.states.get(target.project.id)?.snapshot;
+    if (snapshot) await this.consolePanel.attach(target, snapshot);
   }
   private async pickManagementTarget(node?: WorkspaceNode): Promise<Target | undefined> {
     const project = await this.pickProject(node); if (!project) return undefined;

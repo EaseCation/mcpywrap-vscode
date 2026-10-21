@@ -46,7 +46,7 @@ Target 始终携带 Project 与 session/group ID；Python 操作额外携带 sid
 
 **ADR-04：未知结果保留。** Transport 区分 spawn 失败、明确操作失败、查询失败和已提交变更结果未知；无自动重试。项目级互斥只限制本窗口的变更，跨窗口正确性依赖 mcpy 原有锁，不实现第二套锁。
 
-**ADR-05：日志快照。** 公共日志只支持 tail；明确提供快照。未来 cursor/follow 能力以通用 CLI 功能演进后再接入，不读取内部日志路径。
+**ADR-05：公开增量日志。** 通过通用 logs --follow JSONL 订阅增量日志；保留有限快照查询。旧 CLI 报缺少能力，不读取内部日志路径，也不以文本去重伪造连续流。
 
 **ADR-06：断点后置为通用端点客户端。** 未来插件请求 mcpy 提供通用 debug start/inspect/attach metadata，并连接公开 DAP endpoint。后端、解释器、暂停线程、来源/行号映射和运行包能力由 mcpy 或独立通用调试后端负责。DAP 自身的请求/事件属于调试协议，不构成工具对插件的产品依赖。端点尚未公开前，不登记可运行的假 debugger。
 
@@ -67,3 +67,9 @@ Target 始终携带 Project 与 session/group ID；Python 操作额外携带 sid
 VS Code 文件搜索提供工作区内 `**/pyproject.toml` 候选，排除环境、构建输出和依赖缓存；FilesystemDiscovery 只读取候选声明，校验工作区边界、TOML 表及规范路径。有效 tool.mcpywrap 表才标记项目，父项目与嵌套项目均保留，文件使用最近项目根目录。每工作区最多 2000 个声明，达到上限报告问题。
 
 候选搜索与 TOML 解析只在首次激活、显式刷新、工作区变化或声明 create/change/delete、保存及目录创建/删除后发生；声明事件防抖 250 ms，忽略缓存目录。识别结果和文件归属缓存于内存，切换文件不扫描、不启动 mcpy。标题菜单使用已打开文件的 resourcePath 集合匹配，点击按资源 URI 路由，支持拆分编辑器。首次激活只识别项目；运行时操作只查询所选项目，手动刷新全列表的查询并发最多 3 个项目。
+
+## 8. 运行时控制台与日志订阅
+
+新增独立 LogFollower 端口和可释放订阅。基础设施仅启动 `mcpy logs --follow --source all --format jsonl`，验证逐行 schema；presentation 不读取任何日志路径。旧 CLI 明确提示升级，保留快照查询，不启动后台子进程轮询。mcpy 提供的流是通用 CLI 能力，与 VS Code 无反向依赖。
+
+RuntimeConsole 作为底部 WebviewView，接收已绑定的领域目标，复用 Workbench.execute 和能力校验。Webview 仅传用户意图；宿主检查身份、端侧、代码大小和并发，不信任前端传回的任意路径或命令。CSP 仅允许本扩展静态脚本/样式，用户代码与日志使用 textContent 展示。

@@ -50,3 +50,15 @@ test('reload requires actual side or group coordinator capability', async () => 
   await app.reload({ ...target, kind: 'group', id: 'g1' }, 'server', '/file.py');
   assert.deepEqual(calls, ['reload']);
 });
+test('log subscription is independent of mutation locks and disposing never stops the game', async () => {
+  const { gateway } = fixture(); let stops = 0, disposed = 0;
+  gateway.stop = async () => { stops++; return completed; };
+  const app = new Workbench(gateway, { follow: (_target, emit) => {
+    emit({ kind: 'log', session: 's1', source: 'game', text: 'log' });
+    return { done: Promise.resolve(), dispose: () => { disposed++; } };
+  } });
+  const events: unknown[] = [];
+  const subscription = app.followLogs(target, event => events.push(event), () => assert.fail());
+  subscription.dispose();
+  assert.equal(disposed, 1); assert.equal(stops, 0); assert.equal(events.length, 1);
+});

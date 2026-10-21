@@ -4,6 +4,12 @@ export interface Project {
   readonly workspaceRoot?: string;
 }
 export type Side = 'client' | 'server';
+export type LogSource = 'game' | 'engine' | 'worker';
+export type LogEvent =
+  | { kind: 'log'; session: string; source: LogSource; text: string; role?: string }
+  | { kind: 'state'; session: string; state: string; role?: string }
+  | { kind: 'reset'; session: string; source: LogSource }
+  | { kind: 'end' };
 export interface World { readonly id: string; readonly name: string; readonly state: string }
 export interface Session {
   readonly id: string; readonly state: string; readonly mode: string;

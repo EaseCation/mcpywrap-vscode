@@ -1,4 +1,4 @@
-import { Capabilities, OperationResult, Project, Side, Snapshot, Target } from '../domain/model';
+import { Capabilities, LogEvent, OperationResult, Project, Side, Snapshot, Target } from '../domain/model';
 
 export interface McpyGateway {
   inspect(project: Project): Promise<Snapshot>;
@@ -21,3 +21,7 @@ export interface CliRequest {
 }
 export interface CliTransport { request(command: CliRequest): Promise<Record<string, unknown>> }
 export interface TemporarySource { withFile<T>(code: string, action: (file: string) => Promise<T>): Promise<T> }
+export interface LogSubscription { dispose(): void; readonly done: Promise<void> }
+export interface LogFollower {
+  follow(target: Target, event: (event: LogEvent) => void, error: (error: Error) => void): LogSubscription;
+}

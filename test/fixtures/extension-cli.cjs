@@ -6,6 +6,12 @@ const verb = args[4];
 const record = { project, args };
 if (args.includes('--file')) record.source = fs.readFileSync(args[args.indexOf('--file') + 1], 'utf8');
 if (process.env.MCPY_FIXTURE_LOG) fs.appendFileSync(process.env.MCPY_FIXTURE_LOG, JSON.stringify(record) + '\n');
+if (args.includes('--follow')) {
+  const session = args.includes('--group') ? 'host-session' : args[args.indexOf('--session') + 1];
+  for (const source of ['engine', 'game', 'worker']) process.stdout.write(JSON.stringify({ schema_version: 1, event: 'log', session, source, text: `live ${source} 中文\n` })+'\n');
+  process.stdout.write(JSON.stringify({ schema_version: 1, event: 'end' })+'\n');
+  return;
+}
 if (args[0] !== '--local' || args[3] !== '--non-interactive' || args.at(-1) !== '--json') {
   process.stdout.write(JSON.stringify({ ok: false, error: 'incorrect public CLI prefix' })); process.exit(1);
 }

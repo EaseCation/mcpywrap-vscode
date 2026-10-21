@@ -7,7 +7,9 @@ import { OperationResult } from '../../src/domain/model';
 export async function run(): Promise<void> {
   const extension = vscode.extensions.getExtension('easecation.mcpywrap-vscode');
   assert.ok(extension, 'extension should be installed as a development extension');
-  const api = await extension.activate() as { refresh(): Promise<void>; getProjectCount(): number; getActiveProjectId(): string | undefined };
+  const api = await extension.activate() as { refresh(): Promise<void>; getProjectCount(): number; getActiveProjectId(): string | undefined;
+    getRuntimeState(): { selected?: string; sessions: number; transcript: { source: string; label: string; text: string }[] };
+    executeRuntimeSnippet(key: string, side: 'client' | 'server', code: string): Promise<OperationResult | undefined> };
   // Linux is deliberately unsupported for local game operations; activation still works.
   if (process.platform === 'linux') { assert.equal(api.getProjectCount(), 0); return; }
   assert.equal(api.getProjectCount(), 2, 'nested projects are discovered automatically without settings; generated/cache projects are excluded');
@@ -64,6 +66,14 @@ export async function run(): Promise<void> {
   assert.equal(newWorld?.state, 'running');
   const two = await vscode.commands.executeCommand<OperationResult>('mcpy.runTwoClients');
   assert.equal(two?.group, 'group-one'); assert.equal(two?.state, 'waiting_for_join');
+  const runtime = api.getRuntimeState();
+  assert.ok(runtime.sessions >= 3, 'successful runs automatically bind the console');
+  assert.ok(runtime.selected);
+  const snippet = await api.executeRuntimeSnippet(runtime.selected!, 'client', '1 + 1');
+  assert.equal(snippet?.value, 2, 'console snippets execute without an editor selection');
+  assert.ok(api.getRuntimeState().transcript.some(entry => entry.source === 'python' && entry.text.includes('结果')));
+  assert.ok(api.getRuntimeState().transcript.some(entry => entry.source === 'engine' && entry.text.includes('live engine')));
+  assert.ok(api.getRuntimeState().transcript.some(entry => entry.source === 'game' && entry.text.includes('live game')));
 
   // Use real Extension Host APIs; control only human choices for deterministic smoke tests.
   const descriptor = Object.getOwnPropertyDescriptor(vscode.window, 'showQuickPick');
