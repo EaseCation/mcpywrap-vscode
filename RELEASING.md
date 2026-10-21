@@ -16,8 +16,10 @@
    | Issuer | `https://token.actions.githubusercontent.com` |
    | GitHub owner / repository | `EaseCation` / `mcpywrap-vscode` |
    | Entity type / environment | `Environment` / `marketplace` |
-   | Subject | `repo:EaseCation/mcpywrap-vscode:environment:marketplace` |
+   | Subject | `repo:EaseCation@20168691/mcpywrap-vscode@1427359111:environment:marketplace` |
    | Audience | `api://AzureADTokenExchange` |
+
+   本仓库通过 GitHub 公开设置查询确认 `use_immutable_subject=true`，实际 subject 前缀包含组织 ID `20168691` 和仓库 ID `1427359111`，不能照抄旧的纯名称格式。配置前使用 `gh api repos/EaseCation/mcpywrap-vscode/actions/oidc/customization/sub` 检查 `sub_claim_prefix`，并以 GitHub 实际签发值为准；不更改仓库现有 OIDC 格式。
 
    不创建 Client secret。该信任限定仓库的 marketplace 环境；GitHub Environment 仅允许 `main` 与 `v*` 标签。只有发行工作流的 publish job 有 `id-token: write`；需要进一步限制到特定工作流时可加组织 OIDC claims 策略，不能误认为 environment subject 自带工作流限制。
 3. 把应用的 **Application (client) ID** 和 **Directory (tenant) ID** 分别存到 GitHub 仓库 marketplace Environment 的 `AZURE_CLIENT_ID`、`AZURE_TENANT_ID` Secrets。它们是身份标识，不是会过期的密码；不会创建 `AZURE_CLIENT_SECRET` 或 `VSCE_PAT`。设置仓库变量 `MARKETPLACE_AUTH=entra`（默认也是 entra）。
@@ -26,6 +28,8 @@
 6. 完成一次真实发行后开启仓库变量 `MARKETPLACE_PUBLISH_ENABLED=true`，新标签就会自动执行检查并发布同一份 VSIX。手动上架的同版本不再通过 CI 重发。
 
 创建应用/联合信任、授予 Contributor 是一次性安全授权，由账号持有人明确授权；不会改变现有 Publisher Owner。
+
+当前一次性配置已创建专用单租户应用及上述联合凭据，客户端密码/证书均为 0；身份标识保存于 GitHub marketplace Environment。实际 CI 身份与 Publisher 授权验证结果以运行记录为准。已上架版本为 0.1.4，可通过市场安装。
 
 ## 可选：Marketplace 原生 GitHub OIDC
 
@@ -79,3 +83,5 @@ GitHub Release 可继续分发通用 VSIX，与 Marketplace 是两个独立渠�
 - [Azure Login：OIDC 推荐方案](https://github.com/Azure/login#login-with-openid-connect-oidc-recommended)
 - [vsce Trusted publishing](https://github.com/microsoft/vscode-vsce#trusted-publishing)
 - [最终 OIDC 交换协议修复](https://github.com/microsoft/vscode-vsce/commit/c960f2e97da3360899f2bfe93390fa4890c69327)
+
+- [微软：不可变 GitHub OIDC subject](https://aka.ms/githubImmutableSubjects)
