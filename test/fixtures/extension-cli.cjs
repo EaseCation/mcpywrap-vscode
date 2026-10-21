@@ -22,7 +22,13 @@ if (args[0] !== '--local' || args[3] !== '--non-interactive' || args.at(-1) !== 
   process.stdout.write(JSON.stringify({ ok: false, error: 'incorrect public CLI prefix' })); process.exit(1);
 }
 let result = { ok: true };
-if (verb === 'status') result = { ok: true,
+if (verb === 'modsdk' && args.includes('--inspect')) {
+  const invocation = args[args.indexOf('--python') + 1];
+  result = { ok: true, environment: { invocation, executable: invocation, prefix: '/fixture', base_prefix: '/base', version: '3.14',
+    identity: 'fixture-environment', purelib: '/fixture/lib', platlib: '/fixture/lib' },
+    installed: { version: '3.9.0.1', location: '/fixture/lib', in_environment: true } };
+}
+else if (verb === 'status') result = { ok: true,
   sessions: [
     { session: 'solo-session', state: 'running', mode: 'local', world_ready: true },
     { session: 'host-session', state: 'running', mode: 'local', role: 'host', group: 'group-one' },

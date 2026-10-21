@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DevelopmentHints } from './application/developmentHints';
 import { DevelopmentEnvironments } from './application/developmentEnvironments';
 import { CliDevelopmentEnvironmentGateway } from './infrastructure/mcpy/developmentEnvironment';
 import { DevelopmentEnvironmentPanel } from './presentation/developmentEnvironment';
@@ -27,7 +28,9 @@ export async function activate(context: vscode.ExtensionContext) {
   const unsupported = vscode.env.remoteName ? '当前预览支持本机桌面工作区；Remote SSH/WSL 游戏操作尚未接入。'
     : process.platform !== 'darwin' && process.platform !== 'win32' ? '当前预览支持 Windows/macOS 本机桌面。' : undefined;
   const python = new VscodePythonEnvironment();
-  const development = new DevelopmentEnvironmentPanel(new DevelopmentEnvironments(new CliDevelopmentEnvironmentGateway(transport), python), python);
+  const developmentGateway = new CliDevelopmentEnvironmentGateway(transport);
+  const development = new DevelopmentEnvironmentPanel(new DevelopmentEnvironments(developmentGateway, python), python,
+    new DevelopmentHints(developmentGateway, python));
   const controller = new WorkbenchController(workbench, new FilesystemDiscovery(), unsupported, runtime, development);
   context.subscriptions.push(controller, transport, runtime, development, python);
   await controller.initialize();
