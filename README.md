@@ -5,7 +5,7 @@
 
 在 VS Code 代码工作区中，通过 [mcpywrap](https://github.com/EaseCation/mcpywrap) 管理 Minecraft 中国版游戏测试、查看日志、执行 Python 和热更模块。
 
-这是独立维护的开源扩展，目前处于 **0.1.4 开发预览**阶段。扩展单向调用 mcpy 的公开 CLI，mcpy 独立安装、独立升级，负责构建、部署和游戏生命周期。
+这是独立维护的开源扩展，目前处于 **0.1.5 开发预览**阶段。扩展单向调用 mcpy 的公开 CLI，mcpy 独立安装、独立升级，负责构建、部署和游戏生命周期。
 
 ## 功能与支持范围
 
@@ -36,7 +36,7 @@ mcpy --version
 
 项目初始化、依赖准备与游戏运行环境配置见 [mcpywrap 文档](https://github.com/EaseCation/mcpywrap#readme)。
 
-Marketplace 扩展标识为 `easecation.mcpywrap-vscode`。[市场页面](https://marketplace.visualstudio.com/items?itemName=easecation.mcpywrap-vscode)公开可用后，可在 VS Code 搜索此标识安装，或运行：
+Marketplace 扩展标识为 `easecation.mcpywrap-vscode`。可从[市场页面](https://marketplace.visualstudio.com/items?itemName=easecation.mcpywrap-vscode)或在 VS Code 搜索此标识安装，或运行：
 
 ```sh
 code --install-extension easecation.mcpywrap-vscode
@@ -51,7 +51,7 @@ code --install-extension easecation.mcpywrap-vscode
 在 VS Code 中选择“扩展 → … → 从 VSIX 安装”，加载生成的 `.vsix`。也可使用 CLI：
 
 ```sh
-code --install-extension ./mcpywrap-vscode-0.1.4.vsix
+code --install-extension ./mcpywrap-vscode-0.1.5.vsix
 ```
 
 ## 开始测试

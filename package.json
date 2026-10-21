@@ -2,7 +2,7 @@
   "name": "mcpywrap-vscode",
   "displayName": "mcpywrap — 游戏测试工作区",
   "description": "在 VS Code 中通过 mcpy CLI 管理 Minecraft 中国版测试会话、执行 Python 与热更模块。",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "easecation",
   "repository": {
     "type": "git",
