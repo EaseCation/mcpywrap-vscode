@@ -5,7 +5,7 @@
 
 在 VS Code 代码工作区中，通过 [mcpywrap](https://github.com/EaseCation/mcpywrap) 管理 Minecraft 中国版游戏测试、查看日志、执行 Python 和热更模块。
 
-这是独立维护的开源扩展，目前处于 **0.1.3 开发预览**阶段。扩展单向调用 mcpy 的公开 CLI，mcpy 独立安装、独立升级，负责构建、部署和游戏生命周期。
+这是独立维护的开源扩展，目前处于 **0.1.4 开发预览**阶段（Marketplace 首次上架准备中）。扩展单向调用 mcpy 的公开 CLI，mcpy 独立安装、独立升级，负责构建、部署和游戏生命周期。
 
 ## 功能与支持范围
 
@@ -38,13 +38,14 @@ mcpy --version
 
 扩展暂未发布到 VS Code Marketplace，可通过以下方式获取 VSIX：
 
-1. 在 [Actions](https://github.com/EaseCation/mcpywrap-vscode/actions/workflows/check.yml) 中打开最近一次成功运行，下载任意 `vsix-*` artifact 并解压；当前各平台生成相同类型的通用 VSIX。
-2. 或按下方开发说明从源码构建。
+1. 从 [GitHub Releases](https://github.com/EaseCation/mcpywrap-vscode/releases) 下载已发布版本的 VSIX。
+2. 在 [Actions](https://github.com/EaseCation/mcpywrap-vscode/actions/workflows/check.yml) 中打开最近一次成功运行，下载任意 `vsix-*` artifact 并解压；当前各平台生成相同类型的通用 VSIX。
+3. 或按下方开发说明从源码构建。
 
 在 VS Code 中选择“扩展 → … → 从 VSIX 安装”，加载生成的 `.vsix`。也可使用 CLI：
 
 ```sh
-code --install-extension ./mcpywrap-vscode-0.1.3.vsix
+code --install-extension ./mcpywrap-vscode-0.1.4.vsix
 ```
 
 ## 开始测试
@@ -135,7 +136,7 @@ npm run test:extension
 - Ubuntu、Windows、macOS 上安装锁定依赖，执行检查、测试、构建并生成 VSIX；产物保留 14 天。
 - macOS 上分别使用最低兼容版本 1.95.3 与 stable VS Code 进行隔离宿主测试。
 
-CI 使用只读仓库权限，无需 mcpy、Python、游戏、账号或发布密钥。提交贡献与真机验收方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+检查 CI 使用只读仓库权限，无需 mcpy、Python、游戏、账号或发布密钥。Marketplace 发行流程会先复用这些检查，再用短期 OIDC 身份发布同一份已核验的 VSIX；首次需要现有 Publisher 管理员配置可信发布。账号与自动发布说明见 [RELEASING.md](RELEASING.md)。提交贡献与真机验收方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 反馈与许可
 

@@ -1,0 +1,113 @@
+name: Marketplace release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag on main (vX.Y.Z)
+        required: true
+        type: string
+      publish:
+        description: Publish to Marketplace after checks (false only validates and packages)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marketplace-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Validate release identity and ancestry
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+      version: ${{ steps.release.outputs.version }}
+      file: ${{ steps.release.outputs.file }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - id: release
+        name: Bind version, publisher and main commit
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+        run: node scripts/marketplace-release.mjs tag
+
+  checks:
+    needs: release
+    uses: ./.github/workflows/check.yml
+    with:
+      ref: ${{ needs.release.outputs.sha }}
+
+  artifact:
+    name: Inspect the tested VSIX (also in dry runs)
+    needs: [release, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: vsix-ubuntu-latest
+          path: release-package
+      - name: Verify artifact identity and record its SHA-256
+        env:
+          VSIX_PATH: release-package/${{ needs.release.outputs.file }}
+          RELEASE_VERSION: ${{ needs.release.outputs.version }}
+        run: node scripts/marketplace-release.mjs package
+
+  publish:
+    name: Publish verified VSIX with a short-lived identity
+    needs: [release, checks, artifact]
+    if: >-
+      github.repository == 'EaseCation/mcpywrap-vscode' &&
+      ((github.event_name == 'push' && vars.MARKETPLACE_PUBLISH_ENABLED == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: marketplace
+      url: https://marketplace.visualstudio.com/items?itemName=easecation.mcpywrap-vscode
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Tooling comes from the workflow commit; the published payload comes only
+      # from checks' artifact at the separately validated release SHA.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: vsix-ubuntu-latest
+          path: release-package
+      - name: Verify artifact identity and record its SHA-256
+        env:
+          VSIX_PATH: release-package/${{ needs.release.outputs.file }}
+          RELEASE_VERSION: ${{ needs.release.outputs.version }}
+        run: node scripts/marketplace-release.mjs package
+      - name: Publish the checked package (OIDC only, no credential fallback)
+        env:
+          VSIX_PATH: release-package/${{ needs.release.outputs.file }}
+        run: npx --no-install vsce publish --oidc --packagePath "$VSIX_PATH"
