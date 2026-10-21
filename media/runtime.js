@@ -2,6 +2,7 @@
   const vscode = acquireVsCodeApi();
   const $ = id => document.getElementById(id);
   let state = { sessions: [], transcript: [], busy: false };
+  let renderedFilter, renderedLast = 0;
   const previous = vscode.getState() || {};
   $('code').value = previous.code || '';
   const send = (type, fields = {}) => vscode.postMessage({ type, ...fields });
@@ -21,12 +22,17 @@
     $('run').textContent = state.busy ? '正在执行…' : '运行片段';
     const nearBottom = $('transcript').scrollHeight - $('transcript').scrollTop - $('transcript').clientHeight < 80;
     const source = $('filter').value;
-    $('transcript').replaceChildren(...state.transcript.filter(item => source === 'all' || item.source === source).map(item => {
+    if (source !== renderedFilter) { $('transcript').replaceChildren(); renderedLast = 0; renderedFilter = source; }
+    for (const child of [...$('transcript').children]) if (Number(child.dataset.id) < state.firstId) child.remove();
+    const added = state.transcript.filter(item => item.id > renderedLast && (source === 'all' || item.source === source));
+    $('transcript').append(...added.map(item => {
       const entry = document.createElement('article');
+      entry.dataset.id = String(item.id);
       const label = document.createElement('small'); label.textContent = item.label;
       const output = document.createElement('pre'); output.textContent = item.text;
       entry.append(label, output); return entry;
     }));
+    if (state.transcript.length) renderedLast = state.transcript[state.transcript.length - 1].id;
     if (nearBottom) $('transcript').scrollTop = $('transcript').scrollHeight;
   }
   function execute() {
