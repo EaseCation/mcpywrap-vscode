@@ -11,7 +11,7 @@ export interface McpyGateway {
   diagnose(project: Project): Promise<OperationResult>;
 }
 export interface ProjectDiscovery {
-  discover(roots: readonly { root: string; configured: readonly string[] }[]): Promise<{
+  discover(roots: readonly { root: string; manifests: readonly string[] }[]): Promise<{
     projects: readonly Project[]; issues: readonly string[];
   }>;
   containing(projects: readonly Project[], file: string): Project | undefined;

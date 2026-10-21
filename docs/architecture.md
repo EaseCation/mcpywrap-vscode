@@ -20,7 +20,7 @@ flowchart LR
 | domain | Project、World、Session、Group、Capabilities、ExecutionResult、Target | 无导入 |
 | application | inspect/start/stop/execute/reload/logs 用例，目标与能力检查，项目级变更互斥；Gateway/Transport/File 端口 | domain 与自身端口 |
 | infrastructure/mcpy | 参数构建、原始 JSON 验证与归一化，Node 子进程、临时文件 | application/domain、Node 与本层 |
-| infrastructure/workspace | TOML 标记发现、目录规范化 | application/domain、Node、TOML parser |
+| infrastructure/workspace | 递归 TOML 标记发现、目录规范化与最近项目归属 | application/domain、Node、TOML parser |
 | presentation | 项目树、目标 QuickPick、状态栏、进度与错误反馈 | application/domain、VS Code |
 | extension.ts | 组合根：创建适配器，注入用例和界面，绑定生命周期 | 所有必要具体实现 |
 
@@ -61,3 +61,9 @@ Target 始终携带 Project 与 session/group ID；Python 操作额外携带 sid
 ## 6. 可执行边界验证
 
 `npm run check:architecture` 检查导入方向与私有运行目录耦合；contract tests 使用独立 fake CLI，覆盖 shell 元字符、Unicode、失败和超时。宿主 smoke tests 验证真实 VS Code 激活与命令流程；测试不检出 mcpy 仓库、不安装 Python、不启动游戏。
+
+## 7. 自动发现与编辑器上下文
+
+VS Code 文件搜索提供工作区内 `**/pyproject.toml` 候选，排除环境、构建输出和依赖缓存；FilesystemDiscovery 只读取候选声明，校验工作区边界、TOML 表及规范路径。有效 tool.mcpywrap 表才标记项目，父项目与嵌套项目均保留，文件使用最近项目根目录。每工作区最多 2000 个声明，达到上限报告问题。
+
+候选搜索与 TOML 解析只在首次激活、显式刷新、工作区变化或声明 create/change/delete 后发生；声明事件防抖 250 ms，忽略缓存目录。识别结果和文件归属缓存于内存，切换文件不扫描、不启动 mcpy。标题菜单使用已打开文件的 resourcePath 集合匹配，点击按资源 URI 路由，支持拆分编辑器。首次激活只识别项目；运行时操作只查询所选项目，手动刷新全列表的查询并发最多 3 个项目。

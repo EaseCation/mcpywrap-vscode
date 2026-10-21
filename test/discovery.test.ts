@@ -7,15 +7,15 @@ import { FilesystemDiscovery } from '../src/infrastructure/workspace/discovery';
 import { Utf8TemporarySource } from '../src/infrastructure/mcpy/source';
 import { access, readFile } from 'node:fs/promises';
 
-test('discovery parses TOML, supports explicit nested roots, deduplicates and does not scan recursively', async () => {
+test('manifest discovery filters ordinary Python projects and deduplicates nested declarations', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'mcpy-workspace-'));
   try {
     const nested = path.join(root, '中文 child'); await mkdir(nested);
     await writeFile(path.join(root, 'pyproject.toml'), '# [tool.mcpywrap]\n[project]\nname="plain"\n');
     await writeFile(path.join(nested, 'pyproject.toml'), '[tool."mcpywrap"]\nproject_type="addon"\n');
     const discovery = new FilesystemDiscovery();
-    assert.equal((await discovery.discover([{ root, configured: [] }])).projects.length, 0);
-    const found = await discovery.discover([{ root, configured: ['中文 child', './中文 child'] }]);
+    assert.equal((await discovery.discover([{ root, manifests: [path.join(root, 'pyproject.toml')] }])).projects.length, 0);
+    const found = await discovery.discover([{ root, manifests: [path.join(root, 'pyproject.toml'), path.join(nested, 'pyproject.toml'), path.join(nested, './pyproject.toml')] }]);
     assert.equal(found.projects.length, 1); assert.equal(found.issues.length, 0);
     await writeFile(path.join(nested, 'logic.py'), 'pass\n');
     for (const filename of ['logic.py', 'not-yet-written.py']) {
@@ -25,11 +25,11 @@ test('discovery parses TOML, supports explicit nested roots, deduplicates and do
     assert.equal(discovery.containing(found.projects, `${nested}-other/logic.py`), undefined);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
-test('invalid TOML is an issue, not an unidentified project; configured missing roots are visible', async () => {
+test('invalid TOML is an issue, not an unidentified project; missing declarations are visible', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'mcpy-bad-config-'));
   try {
     await writeFile(path.join(root, 'pyproject.toml'), '[tool.');
-    const result = await new FilesystemDiscovery().discover([{ root, configured: [] }, { root, configured: ['missing'] }]);
+    const result = await new FilesystemDiscovery().discover([{ root, manifests: [path.join(root, 'pyproject.toml'), path.join(root, 'missing', 'pyproject.toml')] }]);
     assert.equal(result.projects.length, 0); assert.equal(result.issues.length, 2);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

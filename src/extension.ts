@@ -18,6 +18,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const controller = new WorkbenchController(new Workbench(new CliGateway(transport, new Utf8TemporarySource())),
     new FilesystemDiscovery(), unsupported);
   context.subscriptions.push(controller, transport);
-  await controller.refresh();
-  return { refresh: () => controller.refresh(), getProjectCount: () => controller.projectCount };
+  await controller.initialize();
+  return { refresh: () => controller.refresh(), getProjectCount: () => controller.projectCount,
+    getActiveProjectId: () => controller.activeProjectId };
 }

@@ -39,7 +39,7 @@ export class WorkspaceTree implements vscode.TreeDataProvider<WorkspaceNode>, vs
     if (!node) return [...this.states.values()].map(state => {
       const item = new WorkspaceNode('project', state.project.label, state.project);
       item.id = state.project.id;
-      item.description = state.loading ? '查询中…' : state.error ? '查询失败 · 结果可能过期' : undefined;
+      item.description = state.loading ? '查询中…' : state.error ? '查询失败 · 结果可能过期' : state.snapshot ? undefined : '待查询';
       return item;
     }).concat(this.issues.map(issue => new WorkspaceNode('message', issue)));
     if (!node.project) return [];
@@ -51,7 +51,7 @@ export class WorkspaceTree implements vscode.TreeDataProvider<WorkspaceNode>, vs
     if (node.kind !== 'project') return [];
     const items: WorkspaceNode[] = [];
     if (state.error) items.push(new WorkspaceNode('message', `查询失败：${state.error}`, node.project));
-    if (!snapshot) return items;
+    if (!snapshot) { items.push(new WorkspaceNode('message', '点击刷新查看世界与会话，或直接运行测试。', node.project)); return items; }
     items.push(...snapshot.issues.map(issue => new WorkspaceNode('message', issue, node.project)));
     items.push(...snapshot.worlds.map(w => new WorkspaceNode('world', `世界 · ${w.name}`, node.project, w)));
     items.push(...snapshot.groups.map(g => new WorkspaceNode('group', `联调组 · ${g.id.slice(0, 8)}`, node.project, g)));

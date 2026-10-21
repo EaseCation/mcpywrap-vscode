@@ -1,4 +1,8 @@
-export interface Project { readonly id: string; readonly root: string; readonly label: string }
+export interface Project {
+  readonly id: string; readonly root: string; readonly label: string;
+  /** Workspace spelling of the root, before filesystem aliases are resolved. */
+  readonly workspaceRoot?: string;
+}
 export type Side = 'client' | 'server';
 export interface World { readonly id: string; readonly name: string; readonly state: string }
 export interface Session {

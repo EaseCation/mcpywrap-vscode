@@ -18,12 +18,18 @@ try {
     await writeFile(path.join(workspace, label, 'pyproject.toml'), '[tool.mcpywrap]\nproject_type="addon"\n');
     await writeFile(path.join(workspace, label, 'logic.py'), '# coding: utf-8\n_result = 1 + 1\n');
   }
+  await writeFile(path.join(workspace, 'README.md'), '# Workspace container\n');
+  for (const folder of ['project-a/build/ignored', 'project-b/.mcpy/cache']) {
+    await mkdir(path.join(workspace, folder), { recursive: true });
+    await writeFile(path.join(workspace, folder, 'pyproject.toml'), '[tool.mcpywrap]\n');
+  }
+  await writeFile(path.join(workspace, 'project-a/config.json'), '{}\n');
   // Unix executable fixture exercises the exact production executable/argv route.
   // Windows still runs activation/discovery; its transport is covered by node tests.
   const executable = path.join(temporary, 'fake-mcpy');
   await writeFile(executable, `#!${process.execPath}\n${await readFile(path.join(root, 'test/fixtures/extension-cli.cjs'), 'utf8')}`, { mode: 0o700 });
   await writeFile(path.join(workspace, '.vscode/settings.json'), JSON.stringify({
-    'mcpy.executable': executable, 'mcpy.projectRoots': ['project-a', 'project-b'],
+    'mcpy.executable': executable,
     'mcpy.queryTimeoutSeconds': 5
   }));
   const log = path.join(temporary, 'cli.jsonl');
@@ -52,7 +58,7 @@ try {
   const records = (await readFile(log, 'utf8').catch(() => '')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
   if (process.platform === 'darwin') {
     if (!records.some(r => r.args.includes('py') && r.source === '_result = 1 + 1\n')) throw new Error('Python source did not cross the public CLI boundary');
-    if (!records.some(r => r.project.endsWith('project-b') && r.args.includes('status'))) throw new Error('Second project was not inspected');
+    if (!records.some(r => r.project.endsWith('project-b') && r.args.includes('run') && !r.args.includes('--list'))) throw new Error('Editor title URI was not routed to project B');
     if (!records.some(r => r.args.includes('reload') && r.args.includes('--group') && r.args.includes('group-one'))) throw new Error('Group member reload did not use group coordination');
     console.log(`Verified ${records.length} public CLI calls in isolated VS Code; no game launched.`);
   }

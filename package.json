@@ -26,7 +26,7 @@
     "workspace"
   ],
   "activationEvents": [
-    "workspaceContains:pyproject.toml"
+    "workspaceContains:**/pyproject.toml"
   ],
   "capabilities": {
     "untrustedWorkspaces": {
@@ -77,7 +77,8 @@
       },
       {
         "command": "mcpy.reloadFile",
-        "title": "mcpy: 热更当前 Python 模块"
+        "title": "mcpy: 热更当前 Python 模块",
+        "icon": "$(sync)"
       },
       {
         "command": "mcpy.doctor",
@@ -96,15 +97,6 @@
           "default": "mcpy",
           "scope": "machine-overridable",
           "description": "mcpy 可执行文件的名称或绝对路径。填写可执行文件路径，不填写 shell 命令。"
-        },
-        "mcpy.projectRoots": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "scope": "resource",
-          "description": "相对于工作区根目录的项目目录。默认发现工作区根目录中声明了 tool.mcpywrap 的 pyproject.toml。"
         },
         "mcpy.queryTimeoutSeconds": {
           "type": "integer",
@@ -144,7 +136,7 @@
     "viewsWelcome": [
       {
         "view": "mcpy.sessions",
-        "contents": "打开含 [tool.mcpywrap] 的项目，或在设置中添加 mcpy.projectRoots。\n[配置 CLI](command:mcpy.configure)\n[刷新](command:mcpy.refresh)"
+        "contents": "自动识别工作区内 pyproject.toml 的 [tool.mcpywrap] 声明。打开项目内任意文件，即可使用编辑器右上角的运行入口。\n[配置 CLI](command:mcpy.configure)\n[刷新](command:mcpy.refresh)"
       }
     ],
     "menus": {
@@ -180,16 +172,62 @@
       "editor/context": [
         {
           "command": "mcpy.executeSelection",
-          "when": "editorLangId == python && editorHasSelection && isWorkspaceTrusted",
+          "when": "editorLangId == python && editorHasSelection && isWorkspaceTrusted && mcpy.activeProject",
           "group": "mcpy@1"
         },
         {
           "command": "mcpy.reloadFile",
-          "when": "editorLangId == python && resourceScheme == file && isWorkspaceTrusted",
+          "when": "editorLangId == python && resourceScheme == file && isWorkspaceTrusted && mcpy.activeProject",
           "group": "mcpy@2"
         }
+      ],
+      "editor/title": [
+        {
+          "command": "mcpy.run",
+          "when": "resourcePath in mcpy.projectFiles && resourceScheme == file && isWorkspaceTrusted",
+          "group": "navigation@10"
+        },
+        {
+          "command": "mcpy.reloadFile",
+          "when": "resourcePath in mcpy.projectFiles && resourceScheme == file && resourceLangId == python && isWorkspaceTrusted",
+          "group": "navigation@11"
+        },
+        {
+          "submenu": "mcpy.projectActions",
+          "when": "resourcePath in mcpy.projectFiles && resourceScheme == file && isWorkspaceTrusted",
+          "group": "navigation@12"
+        }
+      ],
+      "mcpy.projectActions": [
+        {
+          "command": "mcpy.newWorld",
+          "group": "1_run@1"
+        },
+        {
+          "command": "mcpy.runTwoClients",
+          "group": "1_run@2"
+        },
+        {
+          "command": "mcpy.logs",
+          "group": "2_session@1"
+        },
+        {
+          "command": "mcpy.stop",
+          "group": "2_session@2"
+        },
+        {
+          "command": "mcpy.doctor",
+          "group": "3_tools@1"
+        }
       ]
-    }
+    },
+    "submenus": [
+      {
+        "id": "mcpy.projectActions",
+        "label": "游戏测试",
+        "icon": "$(beaker)"
+      }
+    ]
   },
   "scripts": {
     "build": "node scripts/build.mjs",
