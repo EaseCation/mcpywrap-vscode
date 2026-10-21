@@ -29,7 +29,7 @@
 
 创建应用/联合信任、授予 Contributor 是一次性安全授权，由账号持有人明确授权；不会改变现有 Publisher Owner。
 
-当前一次性配置已创建专用单租户应用及上述联合凭据，客户端密码/证书均为 0；身份标识保存于 GitHub marketplace Environment。实际 CI 身份与 Publisher 授权验证结果以运行记录为准。已上架版本为 0.1.4，可通过市场安装。
+当前一次性配置已创建专用单租户应用及上述联合凭据，客户端密码/证书均为 0；身份标识保存于 GitHub marketplace Environment。[实际 CI 身份检查](https://github.com/EaseCation/mcpywrap-vscode/actions/runs/39567424730)已通过：GitHub OIDC → Entra 登录、Marketplace profile 解析及 Publisher 成员检查成功，已在 Members 核对专用服务主体角色为 Contributor。0.1.4 已通过网站首次上架；0.1.5 用于完成首轮真实 CI 发行，运行结果与市场版本仍是上传验收依据。
 
 ## 可选：Marketplace 原生 GitHub OIDC
 
