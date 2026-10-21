@@ -76,6 +76,16 @@ test('execution and reload with a missing outcome are unknown rather than succes
   await assert.rejects(gateway.execute(session, 'client', 'side_effect()'), (e: ToolFailure) => e.kind === 'unknown');
   await assert.rejects(gateway.reload(group, 'client', '/file.py'), (e: ToolFailure) => e.kind === 'unknown');
 });
+test('completed Python receipts require matching game session and side; missing identities are unknown', async () => {
+  for (const extra of [{}, { session: 's1' }, { side: 'client' }, { session: 'other', side: 'client' }, { session: 's1', side: 'server' }]) {
+    const wire = new FixtureTransport(() => ({ ok: true, state: 'completed', ...extra }));
+    await assert.rejects(new CliGateway(wire, source).execute(session, 'client', 'print("hello")'), (e: ToolFailure) => e.kind === 'unknown');
+    assert.equal(wire.calls.length, 1);
+  }
+  const wire = new FixtureTransport(() => ({ ok: true, state: 'completed', session: 's1', side: 'client', value: null, request_id: 'game-request' }));
+  const result = await new CliGateway(wire, source).execute(session, 'client', 'print("hello")');
+  assert.equal(result.side, 'client'); assert.equal(result.requestId, 'game-request'); assert.equal(result.value, null);
+});
 test('partial group reload retains per-member evidence', async () => {
   const gateway = new CliGateway(new FixtureTransport(() => ({ ok: false, state: 'partial', results: [{ session: 's1', state: 'completed' }, { session: 's2', state: 'failed' }] })), source);
   const result = await gateway.reload(group, 'client', '/file.py');

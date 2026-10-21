@@ -1,0 +1,4 @@
+{
+  "scopeName": "source.mcpy-runtime-python",
+  "patterns": [{ "include": "source.python" }]
+}

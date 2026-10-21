@@ -2,7 +2,7 @@
   "name": "mcpywrap-vscode",
   "displayName": "mcpywrap — 游戏测试工作区",
   "description": "在 VS Code 中通过 mcpy CLI 管理 Minecraft 中国版测试会话、执行 Python 与热更模块。",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "easecation",
   "repository": {
     "type": "git",
@@ -126,7 +126,8 @@
       {
         "command": "mcpy.runSnippet",
         "title": "mcpy: 在游戏执行（无需保存）",
-        "icon": "$(debug-console)"
+        "icon": "$(play)",
+        "enablement": "isWorkspaceTrusted && !mcpy.pythonBusy"
       },
       {
         "command": "mcpy.changeSnippetTarget",
@@ -249,6 +250,11 @@
           "command": "mcpy.reloadFile",
           "when": "editorLangId == python && resourceScheme == file && isWorkspaceTrusted && mcpy.activeProject",
           "group": "mcpy@2"
+        },
+        {
+          "command": "mcpy.runSnippet",
+          "when": "editorLangId == mcpy-runtime-python && isWorkspaceTrusted",
+          "group": "mcpy@1"
         }
       ],
       "editor/title": [
@@ -269,7 +275,7 @@
         },
         {
           "command": "mcpy.runSnippet",
-          "when": "resourcePath in mcpy.snippetFiles && resourceScheme == file && isWorkspaceTrusted",
+          "when": "resourceLangId == mcpy-runtime-python && resourceScheme == file && isWorkspaceTrusted",
           "group": "navigation@0"
         }
       ],
@@ -337,6 +343,16 @@
         "aliases": [
           "mcpy log"
         ]
+      },
+      {
+        "id": "mcpy-runtime-python",
+        "aliases": [
+          "游戏内 Python (mcpy)"
+        ],
+        "extensions": [
+          ".mcpy.py"
+        ],
+        "configuration": "./syntaxes/mcpy-runtime-python.configuration.json"
       }
     ],
     "grammars": [
@@ -344,6 +360,11 @@
         "language": "mcpy-log",
         "scopeName": "text.mcpy-log",
         "path": "./syntaxes/mcpy-log.tmLanguage.json"
+      },
+      {
+        "language": "mcpy-runtime-python",
+        "scopeName": "source.mcpy-runtime-python",
+        "path": "./syntaxes/mcpy-runtime-python.tmLanguage.json"
       }
     ],
     "configurationDefaults": {

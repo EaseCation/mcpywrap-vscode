@@ -26,6 +26,7 @@ function sides(v: unknown): Side[] {
 }
 function result(data: Json): OperationResult {
   return { ok: data.ok === true, state: text(data.state), session: text(data.session), group: text(data.group),
+    side: data.side === 'client' || data.side === 'server' ? data.side : undefined,
     requestId: text(data.request_id), stdout: text(data.stdout), stderr: text(data.stderr),
     error: text(data.error), hint: text(data.hint), value: data.value, details: data };
 }
@@ -82,6 +83,10 @@ export class CliGateway implements McpyGateway {
     return this.source.withFile(code, async file => {
       const data = await this.transport.request(commands.execute(target, side, file));
       if (data.ok === true && typeof data.state !== 'string') throw new ToolFailure('unknown', '执行响应缺少状态。', '请检查原会话的日志，不重复执行。', data);
+      if ((data.session !== undefined && data.session !== target.id) || (data.side !== undefined && data.side !== side) ||
+          (data.ok === true && data.state === 'completed' && (data.session !== target.id || data.side !== side))) {
+        throw new ToolFailure('unknown', '执行回执的游戏会话或端侧缺失/不匹配，无法确认执行结果。', '检查原会话日志；不要重复执行代码。', data);
+      }
       return result(data);
     });
   }

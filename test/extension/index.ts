@@ -8,7 +8,7 @@ export async function run(): Promise<void> {
   const extension = vscode.extensions.getExtension('easecation.mcpywrap-vscode');
   assert.ok(extension, 'extension should be installed as a development extension');
   const api = await extension.activate() as { refresh(): Promise<void>; getProjectCount(): number; getActiveProjectId(): string | undefined;
-    getRuntimeState(): { selected?: string; sessions: number; transcript: { source: string; label: string; text: string }[];
+    getRuntimeState(): { selected?: string; sessions: number; busy: boolean; transcript: { source: string; label: string; text: string }[];
       channels: string[]; raw: boolean; displayed: { engine: string; script: string } };
     executeRuntimeSnippet(key: string, side: 'client' | 'server', code: string): Promise<OperationResult | undefined> };
   // Linux is deliberately unsupported for local game operations; activation still works.
@@ -84,6 +84,7 @@ export async function run(): Promise<void> {
   } finally { await writeFile(process.env.MCPY_FIXTURE_START_BARRIER!, 'ready'); }
   const routed = await launching;
   assert.equal(routed?.session, 'solo-session', 'title command must accept the clicked editor URI even when another project is active');
+  assert.ok(api.getRuntimeState().displayed.script.includes('游戏会话'));
   const started = await vscode.commands.executeCommand<OperationResult>('mcpy.run');
   assert.equal(started?.session, 'solo-session');
   assert.equal(started?.details.source_matches, false, 'reuse evidence must survive presentation');
@@ -94,7 +95,20 @@ export async function run(): Promise<void> {
   const runtime = api.getRuntimeState();
   assert.ok(runtime.sessions >= 3, 'successful runs automatically bind the console');
   assert.ok(runtime.selected);
-  const snippet = await api.executeRuntimeSnippet(runtime.selected!, 'client', '1 + 1');
+  let pythonReturned = false;
+  const executing = api.executeRuntimeSnippet(runtime.selected!, 'client', '1 + 1').then(result => { pythonReturned = true; return result; });
+  try {
+    const deadline = Date.now() + 15000;
+    while (!(await callLog()).split('\n').some(line => JSON.parse(line).args.includes('py')) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 25));
+    assert.equal(pythonReturned, false, 'game receipt has not been returned yet');
+    assert.equal(api.getRuntimeState().busy, true);
+    assert.ok(api.getRuntimeState().displayed.script.includes('执行目标：游戏进程内的 客户端'));
+    assert.ok(api.getRuntimeState().displayed.script.includes('等待游戏回执'));
+    await api.executeRuntimeSnippet(runtime.selected!, 'client', 'do_not_repeat()');
+    assert.equal((await callLog()).split('\n').filter(line => JSON.parse(line).args.includes('py')).length, 1, 'repeated execution while awaiting a receipt must not submit code twice');
+  } finally { await writeFile(process.env.MCPY_FIXTURE_PY_BARRIER!, 'ready'); }
+  const snippet = await executing;
+  assert.equal(api.getRuntimeState().busy, false);
   assert.equal(snippet?.value, 2, 'console snippets execute without an editor selection');
   assert.ok(api.getRuntimeState().transcript.some(entry => entry.source === 'python' && entry.text.includes('结果')));
   assert.ok(api.getRuntimeState().transcript.some(entry => entry.source === 'engine' && entry.text.includes('live engine')));
@@ -122,7 +136,8 @@ export async function run(): Promise<void> {
   try {
     await vscode.commands.executeCommand('mcpy.newSnippet');
     const scratch = vscode.window.activeTextEditor!.document;
-    assert.equal(scratch.languageId, 'python');
+    assert.equal(scratch.languageId, 'mcpy-runtime-python', 'game scratch language must not match the local Python run toolbar');
+    assert.equal(document.languageId, 'python', 'business Python files keep their normal language and tooling');
     assert.equal(scratch.uri.scheme, 'file', 'snippets have a dedicated path without a Save As step');
     assert.ok(!scratch.uri.fsPath.startsWith(workspace), 'scratch files must stay outside the business workspace');
     const initial = await readFile(scratch.uri.fsPath, 'utf8');
@@ -136,6 +151,8 @@ export async function run(): Promise<void> {
     assert.ok(runLens, 'native editor exposes an unambiguous game execution action');
     const draftResult = await vscode.commands.executeCommand<OperationResult>(runLens.command, ...runLens.arguments!);
     assert.equal(draftResult?.value, 2);
+    assert.ok(api.getRuntimeState().displayed.script.includes('游戏已确认执行完成'));
+    assert.ok(api.getRuntimeState().displayed.script.includes('fixture-game-request'));
     assert.ok(scratch.isDirty, 'game execution must not save editor modifications');
     assert.equal(await readFile(scratch.uri.fsPath, 'utf8'), initial, 'execution must leave the scratch disk contents untouched');
     const lastPythonCall = async () => JSON.parse(((await callLog()).split('\n').filter(Boolean).reverse().find(line => {
@@ -159,6 +176,19 @@ export async function run(): Promise<void> {
     await vscode.window.showTextDocument(scratch.uri);
     const reopened = await vscode.commands.executeCommand<OperationResult>('mcpy.runSnippet', scratch.uri);
     assert.equal(reopened?.value, 2, 'closing and reopening a draft must preserve its game target in the current window');
+    const legacyUri = vscode.Uri.joinPath(scratch.uri, '..', 'mcpy-runtime-777.py');
+    const noResultSource = '# MCPY_NO_RESULT\nprint("hello2")\n';
+    await vscode.workspace.fs.writeFile(legacyUri, new TextEncoder().encode(noResultSource));
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(legacyUri));
+    const languageDeadline = Date.now() + 5000;
+    while (vscode.window.activeTextEditor?.document.languageId !== 'mcpy-runtime-python' && Date.now() < languageDeadline) await new Promise(resolve => setTimeout(resolve, 25));
+    assert.equal(vscode.window.activeTextEditor?.document.languageId, 'mcpy-runtime-python', 'opened legacy scratch files adopt the game language without directory scanning');
+    assert.equal(await readFile(legacyUri.fsPath, 'utf8'), noResultSource, 'language migration must not modify user code');
+    const noResult = await vscode.commands.executeCommand<OperationResult>('mcpy.runSnippet', legacyUri);
+    assert.equal(noResult?.value, null, 'an unbound restored draft lets the user select a game target before executing');
+    const receipt = api.getRuntimeState().transcript.filter(entry => entry.source === 'python').at(-1)?.text ?? '';
+    assert.ok(receipt.includes('hello2') && receipt.includes('游戏已确认执行完成'));
+    assert.ok(!receipt.includes('结果：null'));
     const editor = await vscode.window.showTextDocument(document);
     editor.selection = new vscode.Selection(1, 0, 2, 0);
     const executed = await vscode.commands.executeCommand<OperationResult>('mcpy.executeSelection');
@@ -171,6 +201,11 @@ export async function run(): Promise<void> {
   } finally {
     if (descriptor) Object.defineProperty(vscode.window, 'showQuickPick', descriptor);
   }
+  await writeFile(process.env.MCPY_FIXTURE_START_BARRIER!, 'log-fail');
+  await vscode.commands.executeCommand('mcpy.run', clicked);
+  const failureDeadline = Date.now() + 10000;
+  while (!api.getRuntimeState().displayed.script.includes('fixture 日志失联') && Date.now() < failureDeadline) await new Promise(resolve => setTimeout(resolve, 25));
+  assert.ok(api.getRuntimeState().displayed.script.includes('fixture 日志失联'));
   await writeFile(process.env.MCPY_FIXTURE_START_BARRIER!, 'query-fail');
   const knownStart = await vscode.commands.executeCommand<OperationResult>('mcpy.run', clicked);
   assert.equal(knownStart?.session, 'solo-session', 'a failed follow-up query must not erase the confirmed start result');

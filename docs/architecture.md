@@ -76,4 +76,6 @@ RuntimeConsole 使用两个原生 OutputChannel，分别承载引擎（engine/wo
 
 启动诊断通过可选回调从 ProcessTransport 的 stderr 经 CliGateway/Workbench 传递，保持最终 stdout JSON 与变更结果语义不变；诊断观察器失败不改变命令结果。子进程使用 UTF-8 输出。StartupFeedback 在应用层按 CR/LF 分帧、去除终端控制序列、限制长行并格式化耗时，展示层以每个启动请求一个轻量计时器刷新原生通知与引擎输出。半行最多等待一个计时周期，启动命令成功后切换到查询/订阅阶段；所有结束路径释放计时器。此路径不扫描工作区、轮询 CLI、解析人类诊断中的会话 ID 或读私有文件。
 
-Python 片段在 ExtensionContext.storageUri（无工作区时回退 globalStorageUri）的 snippets/ 中创建命名 `.py` 文件，使用原生 Python 编辑器、QuickPick、CodeLens、编辑器标题命令、状态栏与快捷键。片段目录由组合根注入；创建时写入初始内容，编辑和执行不自动保存。绑定按文档 URI 在窗口内存中保留，关闭再打开仍可使用，窗口重载不恢复执行目标。CodeLens 只做 URI 内存查表，不扫描或调用 CLI。执行捕获 TextDocument.getText 的内存快照，复用 Workbench.execute、能力检查与一次性 UTF-8 临时文件，完成或失败后清理该临时文件；不创建 HTML、Webview、伪终端或自定义输入控件。关闭草稿保留已连接的游戏与日志。
+Python 片段在 ExtensionContext.storageUri（无工作区时回退 globalStorageUri）的 snippets/ 中创建 `.mcpy.py` 文件，使用独立 mcpy-runtime-python 语言、Python TextMate scope、基本编辑配置及原生 CodeLens、标题命令、状态栏和快捷键。与普通 Python 的语言上下文分开，避免混入本机解释器运行入口；不修改用户 Python 扩展的全局设置。仅对当前存储目录已打开的旧草稿迁移语言，不扫描文件系统。
+
+目录和存储边界由组合根注入；创建时写入初始内容，编辑和执行不自动保存。绑定在窗口内存中保留，重载后显式重新选择目标。执行捕获 TextDocument.getText 快照，复用 Workbench.execute、能力检查与一次性 UTF-8 临时文件。CLI 适配器核验 completed 回执的 session/side，界面据此显示游戏执行确认及实际 request_id。省略 null/undefined，保留其他假值。原生进度显示等待状态，执行开始即打开脚本输出，结束清除忙状态。关闭草稿保留游戏与日志。

@@ -51,7 +51,7 @@ try {
     extensionDevelopmentPath: root,
     extensionTestsPath: path.join(root, '.test-build/test/extension/index.js'),
     extensionTestsEnv: { MCPY_FIXTURE_LOG: log, MCPY_FIXTURE_WORKSPACE: workspace,
-      MCPY_FIXTURE_START_BARRIER: path.join(temporary, 'allow-start') },
+      MCPY_FIXTURE_START_BARRIER: path.join(temporary, 'allow-start'), MCPY_FIXTURE_PY_BARRIER: path.join(temporary, 'allow-python') },
     launchArgs: [workspace, '--user-data-dir', path.join(temporary, 'user-data'),
       '--extensions-dir', path.join(temporary, 'extensions'), '--disable-extensions',
       '--disable-workspace-trust', '--skip-welcome', '--skip-release-notes', '--disable-updates']

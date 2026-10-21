@@ -1,7 +1,7 @@
 import { LogSource } from '../domain/model';
 
 export type LogPart = 'engine' | 'script';
-export interface LogRecord { source: LogSource | 'python' | 'system'; label: string; text: string; visible: boolean }
+export interface LogRecord { source: LogSource | 'python' | 'system'; label: string; text: string; visible: boolean; part?: LogPart }
 export function logPart(source: LogRecord['source']): LogPart { return source === 'game' || source === 'python' ? 'script' : 'engine'; }
 
 /** Equivalent to mcpywrap.ui.session_tools.DebugLogFilter, scoped per stream. */

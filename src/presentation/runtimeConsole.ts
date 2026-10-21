@@ -3,12 +3,14 @@ import { Workbench } from '../application/workbench';
 import { LogSubscription } from '../application/ports';
 import { LogHistory, LogLines, LogPart, LogRecord, logPart, renderRecord } from '../application/logHistory';
 import { LogEvent, LogSource, OperationResult, Project, Session, Side, Snapshot, Target } from '../domain/model';
+import { executionReceipt, executionRequest, sideLabel } from '../application/executionReceipt';
 
 interface BoundSession { key: string; target: Target; session: Session }
 interface Draft { key: string; side: Side }
 interface Subscription { target: Target; subscription: LogSubscription; members: Set<string> }
 const SOURCE_LABEL: Record<LogSource, string> = { engine: '引擎', game: '脚本系统', worker: '启动器' };
 const memberName = (session: Session) => `${session.role ? session.role + ' ' : ''}${session.id.slice(0, 8)}`;
+const RUNTIME_LANGUAGE = 'mcpy-runtime-python';
 
 /** Native Output + native Python scratch editors. No custom frontend. */
 export class RuntimeConsole implements vscode.Disposable {
@@ -33,26 +35,28 @@ export class RuntimeConsole implements vscode.Disposable {
   private timer?: ReturnType<typeof setTimeout>;
   private busy = false;
   private snippetSequence = 0;
+  private executionSequence = 0;
 
-  constructor(private readonly workbench: Workbench, private readonly snippetDirectory: vscode.Uri) {
+  constructor(private readonly workbench: Workbench, private readonly snippetDirectory: vscode.Uri,
+    private readonly snippetRoot: vscode.Uri) {
     this.status.command = 'mcpy.changeSnippetTarget';
     this.disposables.push(vscode.window.onDidChangeActiveTextEditor(() => this.updateDraftContext()),
       vscode.workspace.onDidCloseTextDocument(() => this.updateDraftContext()),
+      vscode.workspace.onDidOpenTextDocument(document => { void this.adoptLegacySnippet(document); }),
       this.lensesChanged,
-      vscode.languages.registerCodeLensProvider({ language: 'python', scheme: 'file' }, {
+      vscode.languages.registerCodeLensProvider({ language: RUNTIME_LANGUAGE, scheme: 'file' }, {
         onDidChangeCodeLenses: this.lensesChanged.event,
         provideCodeLenses: document => {
           const draft = this.drafts.get(document.uri.toString());
           const bound = draft ? this.sessions.get(draft.key) : undefined;
-          if (!draft || !bound) return [];
           const range = new vscode.Range(0, 0, 0, 0);
-          return [new vscode.CodeLens(range, { title: '▶ mcpy: 在游戏执行（无需保存）', command: 'mcpy.runSnippet', arguments: [document.uri] }),
-            new vscode.CodeLens(range, { title: `${bound.target.project.label} · ${memberName(bound.session)} · ${draft.side}`, command: 'mcpy.changeSnippetTarget', arguments: [document.uri] })];
+          return [new vscode.CodeLens(range, { title: this.busy ? '等待游戏回执…' : '▶ 在游戏执行（无需保存）', command: this.busy ? '' : 'mcpy.runSnippet', arguments: [document.uri] }),
+            new vscode.CodeLens(range, { title: draft && bound ? `游戏内 · ${bound.target.project.label} · ${memberName(bound.session)} · ${sideLabel(draft.side)}` : '选择游戏会话和执行端侧', command: 'mcpy.changeSnippetTarget', arguments: [document.uri] })];
         }
       }));
     const command = (name: string, action: (resource?: vscode.Uri) => unknown) => this.disposables.push(vscode.commands.registerCommand(`mcpy.${name}`, async (argument?: unknown) => {
       try { return await action(argument instanceof vscode.Uri ? argument : undefined); }
-      catch (reason) { this.report(reason); return undefined; }
+      catch (reason) { this.report(reason, 'mcpy', ['newSnippet', 'runSnippet', 'changeSnippetTarget'].includes(name) ? 'python' : 'system'); return undefined; }
     }));
     command('showEngineLog', () => this.show('engine'));
     command('showScriptLog', () => this.show('script'));
@@ -65,6 +69,16 @@ export class RuntimeConsole implements vscode.Disposable {
     command('newSnippet', () => this.openSnippet());
     command('runSnippet', resource => this.runDraft(resource));
     command('changeSnippetTarget', resource => this.changeDraftTarget(resource));
+    void vscode.commands.executeCommand('setContext', 'mcpy.pythonBusy', false);
+    for (const document of vscode.workspace.textDocuments) void this.adoptLegacySnippet(document);
+  }
+  private async adoptLegacySnippet(document: vscode.TextDocument): Promise<void> {
+    if (this.disposed || document.uri.scheme !== 'file' || document.languageId === RUNTIME_LANGUAGE ||
+        !document.uri.path.startsWith(this.snippetRoot.path + '/') || !/\/mcpy-runtime-\d+\.py$/.test(document.uri.path)) return;
+    try {
+      await vscode.languages.setTextDocumentLanguage(document, RUNTIME_LANGUAGE);
+      this.updateDraftContext(); this.lensesChanged.fire();
+    } catch { /* A closing document can disappear during language adoption. */ }
   }
   async attach(target: Target, snapshot: Snapshot): Promise<void> {
     const members = target.kind === 'group' ? snapshot.groups.find(group => group.id === target.id)?.members ?? [] : [target.id];
@@ -90,7 +104,7 @@ export class RuntimeConsole implements vscode.Disposable {
       this.append({ source: 'system', label: target.project.label,
         text: '[+] 开始订阅引擎/脚本系统日志（包含近期历史，重新连接可能重叠）。\n', visible: true });
       const subscription = this.workbench.followLogs(target, event => this.onLog(target, allowed, event), reason => {
-        this.subscriptions.delete(key); this.finish(target.project.id, allowed); this.report(reason);
+        this.subscriptions.delete(key); this.finish(target.project.id, allowed); this.logIssue(target, reason);
       });
       this.subscriptions.set(key, { target, subscription, members: allowed });
       void subscription.done.then(() => {
@@ -98,12 +112,19 @@ export class RuntimeConsole implements vscode.Disposable {
         this.updateRuntimeContext();
       });
     }
+    this.append({ source: 'system', part: 'script', label: `${target.project.label} · 游戏会话`, visible: true,
+      text: `[+] 已选择${target.kind === 'group' ? '联调组' : '游戏会话'}：${target.id}\n正在订阅游戏脚本日志；游戏内 Python 的请求与回执也显示在这里。\n` });
     this.updateRuntimeContext(); this.updateDraftContext(); this.show('script');
+  }
+  private logIssue(target: Target, reason: unknown): void {
+    this.report(reason, target.project.label, 'system', false);
+    this.append({ source: 'system', part: 'script', label: `${target.project.label} · 日志提示`, visible: true,
+      text: `[!] 游戏日志订阅出现问题：${reason instanceof Error ? reason.message : String(reason)}\n详情见引擎输出，可重新连接会话日志；此提示不代表游戏已停止。\n` });
   }
   private onLog(target: Target, members: Set<string>, event: LogEvent): void {
     if (this.disposed) return;
     if (event.kind !== 'end' && !members.has(event.session)) {
-      this.report(new Error('日志成员已变化，请重新连接目标。')); return;
+      this.logIssue(target, new Error('日志成员已变化，请重新连接目标。')); return;
     }
     if (event.kind === 'log') {
       const key = `${target.project.id}:${event.session}:${event.source}`;
@@ -141,7 +162,7 @@ export class RuntimeConsole implements vscode.Disposable {
   }
   private append(record: LogRecord): void {
     if (this.disposed) return;
-    const part = logPart(record.source);
+    const part = record.part ?? logPart(record.source);
     this.histories[part].append(record);
     if (this.raw || record.visible) {
       this.queued[part] += renderRecord(record);
@@ -179,6 +200,7 @@ export class RuntimeConsole implements vscode.Disposable {
   }
   private async chooseDraft(): Promise<Draft | undefined> {
     if (!vscode.workspace.isTrusted) return undefined;
+    if (!this.sessions.size) throw new Error('请先启动测试，或连接已有游戏会话日志。');
     const bound = (await vscode.window.showQuickPick([...this.sessions.values()].filter(value => ['running', 'starting'].includes(value.session.state))
       .map(value => ({ label: `${value.target.project.label} · ${memberName(value.session)}`, description: value.session.state,
         detail: `${value.target.project.root} · ${value.target.id}`, bound: value })), { title: '选择运行时 Python 会话', matchOnDetail: true }))?.bound;
@@ -193,27 +215,28 @@ export class RuntimeConsole implements vscode.Disposable {
   async openSnippet(): Promise<void> {
     if (!this.sessions.size) throw new Error('请先启动测试，或连接已有会话日志。');
     const draft = await this.chooseDraft(); if (!draft) return;
-    const resource = vscode.Uri.joinPath(this.snippetDirectory, `mcpy-runtime-${++this.snippetSequence}.py`);
+    const resource = vscode.Uri.joinPath(this.snippetDirectory, `mcpy-runtime-${++this.snippetSequence}.mcpy.py`);
     await vscode.workspace.fs.createDirectory(this.snippetDirectory);
-    await vscode.workspace.fs.writeFile(resource, new TextEncoder().encode(
-      '# 游戏运行时 Python：点击上方 mcpy「在游戏执行」，或按 Ctrl/⌘+Enter。\n' +
-      '# 直接执行当前编辑内容，无需保存；不要使用本机 Python 的运行按钮。\n' +
-      '# 点击上方目标或状态栏可切换会话和端侧。\n1 + 1\n'));
+    await vscode.workspace.fs.writeFile(resource, new TextEncoder().encode('print("hello")\n'));
     const document = await vscode.workspace.openTextDocument(resource);
     this.drafts.set(document.uri.toString(), draft);
-    await vscode.window.showTextDocument(document, { preview: false }); this.updateDraftContext(); this.lensesChanged.fire();
+    await vscode.window.showTextDocument(document, { preview: false }); this.updateDraftContext(); this.lensesChanged.fire(); this.show('script');
   }
   private async changeDraftTarget(resource?: vscode.Uri): Promise<void> {
     const document = resource ? await vscode.workspace.openTextDocument(resource) : vscode.window.activeTextEditor?.document;
-    if (!document || !this.drafts.has(document.uri.toString())) return;
+    if (!document || (document.languageId !== RUNTIME_LANGUAGE && !this.drafts.has(document.uri.toString()))) return;
     const draft = await this.chooseDraft(); if (draft) this.drafts.set(document.uri.toString(), draft);
     this.updateDraftContext(); this.lensesChanged.fire();
   }
   private async runDraft(resource?: vscode.Uri): Promise<OperationResult | undefined> {
     const editor = vscode.window.activeTextEditor;
     const document = resource ? await vscode.workspace.openTextDocument(resource) : editor?.document;
-    const draft = document ? this.drafts.get(document.uri.toString()) : undefined;
-    if (!document || !draft) throw new Error('请先打开运行时 Python 草稿。');
+    if (!document || (document.languageId !== RUNTIME_LANGUAGE && !this.drafts.has(document.uri.toString()))) throw new Error('请先打开游戏内 Python 草稿。');
+    let draft = this.drafts.get(document.uri.toString());
+    if (!draft) {
+      draft = await this.chooseDraft(); if (!draft) return undefined;
+      this.drafts.set(document.uri.toString(), draft); this.updateDraftContext(); this.lensesChanged.fire();
+    }
     const selectedCode = editor?.document.uri.toString() === document.uri.toString() && !editor.selection.isEmpty ? document.getText(editor.selection) : document.getText();
     return this.executeSnippet(draft.key, draft.side, selectedCode);
   }
@@ -221,45 +244,57 @@ export class RuntimeConsole implements vscode.Disposable {
     const document = vscode.window.activeTextEditor?.document;
     const draft = document ? this.drafts.get(document.uri.toString()) : undefined;
     const bound = draft ? this.sessions.get(draft.key) : undefined;
-    void vscode.commands.executeCommand('setContext', 'mcpy.snippetActive', !!draft && !!bound);
+    const runtimeDocument = document?.languageId === RUNTIME_LANGUAGE || !!draft;
+    void vscode.commands.executeCommand('setContext', 'mcpy.snippetActive', runtimeDocument);
     void vscode.commands.executeCommand('setContext', 'mcpy.snippetFiles', [...this.drafts.keys()].map(key => vscode.Uri.parse(key).path));
     if (draft && bound) {
-      this.status.text = `$(terminal) Python · ${bound.target.project.label} · ${memberName(bound.session)} · ${draft.side}`;
+      this.status.text = `$(debug-console) 游戏内 Python · ${bound.target.project.label} · ${memberName(bound.session)} · ${sideLabel(draft.side)}`;
       this.status.tooltip = `${bound.target.project.root}\n${bound.target.id}\n点击切换执行目标`;
       this.status.show();
+    } else if (runtimeDocument) {
+      this.status.text = '$(debug-console) 游戏内 Python · 选择游戏会话';
+      this.status.tooltip = '点击选择会话和客户端/服务端；先启动测试或连接已有会话日志。'; this.status.show();
     } else this.status.hide();
   }
   private updateRuntimeContext(): void {
     void vscode.commands.executeCommand('setContext', 'mcpy.hasRuntime', !this.disposed && this.sessions.size > 0);
   }
   async executeSnippet(key: string, side: Side, code: string): Promise<OperationResult | undefined> {
-    if (!vscode.workspace.isTrusted || this.disposed || this.busy) return undefined;
+    if (!vscode.workspace.isTrusted || this.disposed) return undefined;
+    if (this.busy) { this.show('script'); void vscode.window.showInformationMessage('上一条游戏内 Python 请求仍在等待回执，请查看脚本系统输出。'); return undefined; }
     const bound = this.sessions.get(key);
     if (!bound || !['client', 'server'].includes(side) || !code.trim()) return undefined;
     if (code.length > 32768) throw new Error('片段超过 32 Ki 字符，请缩小执行范围。');
     this.busy = true;
+    void vscode.commands.executeCommand('setContext', 'mcpy.pythonBusy', true); this.lensesChanged.fire();
     const label = `${bound.target.project.label} · ${memberName(bound.session)} · ${side}`;
-    this.append({ source: 'python', label, text: `>>> ${code}\n`, visible: true });
+    const sequence = ++this.executionSequence;
+    this.append({ source: 'python', label, text: executionRequest(bound.target, side, code, sequence), visible: true });
+    this.show('script');
     try {
-      const result = await this.workbench.execute(bound.target, side, code);
-      const text = [result.stdout, result.stderr,
-        result.value !== undefined ? `结果：${JSON.stringify(result.value, null, 2)}` : '', result.error ? `Error: ${result.error}` : '',
-        `状态：${result.state ?? (result.ok ? 'completed' : 'failed')}${result.requestId ? ` · request_id=${result.requestId}` : ''}`, result.hint].filter(Boolean).join('\n') + '\n';
-      this.append({ source: 'python', label, text, visible: true }); this.show('script');
+      const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification,
+        title: `游戏内 Python · ${bound.target.project.label} · ${sideLabel(side)}`, cancellable: false }, progress => {
+        progress.report({ message: `等待游戏会话 ${bound.target.id.slice(0, 8)} 的执行回执…` });
+        return this.workbench.execute(bound.target, side, code);
+      });
+      this.append({ source: 'python', label, text: executionReceipt(bound.target, side, result, sequence), visible: true }); this.show('script');
       return result;
     } catch (reason) { this.report(reason, label, 'python'); return undefined; }
-    finally { this.busy = false; }
+    finally {
+      this.busy = false;
+      if (!this.disposed) { void vscode.commands.executeCommand('setContext', 'mcpy.pythonBusy', false); this.lensesChanged.fire(); }
+    }
   }
   executeInSession(target: Target, session: Session, side: Side, code: string): Promise<OperationResult | undefined> {
     const key = `${target.project.id}:${session.id}`;
     this.sessions.set(key, { key, target, session }); this.selected = key; this.updateRuntimeContext();
     return this.executeSnippet(key, side, code);
   }
-  private report(reason: unknown, label = 'mcpy', source: 'system' | 'python' = 'system'): void {
+  private report(reason: unknown, label = 'mcpy', source: 'system' | 'python' = 'system', reveal = true): void {
     const message = reason instanceof Error ? reason.message : String(reason);
     const hint = reason && typeof reason === 'object' && 'hint' in reason ? `\n${String(reason.hint)}` : '';
     this.append({ source, label, text: `[!] ${message}${hint}\n`, visible: true });
-    this.show(source === 'python' ? 'script' : 'engine');
+    if (reveal) this.show(source === 'python' ? 'script' : 'engine');
   }
   getState(): { selected?: string; sessions: number; transcript: readonly LogRecord[]; busy: boolean; channels: readonly string[]; raw: boolean; displayed: { engine: string; script: string } } {
     return { selected: this.selected, sessions: this.sessions.size,
@@ -276,5 +311,6 @@ export class RuntimeConsole implements vscode.Disposable {
     void vscode.commands.executeCommand('setContext', 'mcpy.hasRuntime', false);
     void vscode.commands.executeCommand('setContext', 'mcpy.snippetActive', false);
     void vscode.commands.executeCommand('setContext', 'mcpy.snippetFiles', []);
+    void vscode.commands.executeCommand('setContext', 'mcpy.pythonBusy', false);
   }
 }

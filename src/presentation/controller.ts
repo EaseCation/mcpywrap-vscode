@@ -288,6 +288,7 @@ export class WorkbenchController implements vscode.Disposable {
           if (state?.snapshot && !state.error && this.consolePanel) {
             await this.consolePanel.attach(target, state.snapshot);
             feedback.finish('[+] 已发起会话日志订阅，可在来源下拉框切换引擎和脚本系统。');
+            this.consolePanel.show('script');
           } else {
             feedback.finish(`[!] 启动命令已返回，但会话日志尚未连接${state?.error ? `：${state.error}` : ''}。请刷新项目后使用“连接会话日志”，不要重复启动。`);
             this.consolePanel?.show('engine');

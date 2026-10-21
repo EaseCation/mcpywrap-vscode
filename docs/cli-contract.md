@@ -18,7 +18,7 @@
 | 停止 | stop --session/--group ID | ok；附加状态原样保留 |
 | 能力 | runtime capabilities --session ID | python.sides[]、python.reload_sides[]、reload.python.state |
 | 组能力 | runtime capabilities --group ID | coordinated_reload；members 等附加结果保留 |
-| 执行 | runtime py --session ID --side client/server --file TEMP | state、stdout/stderr/value/error、可选 request_id |
+| 执行 | runtime py --session ID --side client/server --file TEMP | state、session、side、stdout/stderr/value/error、可选 request_id |
 | 热更 | runtime reload python --session/--group ID --side SIDE --file FILE | state 或组 results，ok，effect_verified 等原样保留 |
 | 日志 | logs --session/--group ID --source game/engine/worker --tail 300 | text 或 logs[] 中的 text、role、session |
 | 环境 | doctor | ok、state、hint、诊断等，完整显示 |
@@ -32,6 +32,8 @@
 合法响应必须为对象，且包含 boolean ok。关键列表必须有正确类型；关键身份缺失时拒绝该响应，避免将错误转成空列表或随机目标。stderr 与输出有长度上限；使用流的 UTF-8 解码，防止跨 chunk 的中文被损坏。
 
 ok=false 保留 error/code/hint 及原始结构化结果。执行与组热更的失败结果仍用于展示，不因异常处理丢掉 request_id 或成员详情。unknown/partial 不能显示为成功。
+
+Python completed 成功回执必须携带匹配请求的 session 与 side；缺失或不一致视为结果未知，不显示游戏内执行成功，也不重试。附加 request_id 原样显示，不在扩展中伪造游戏请求 ID。
 
 spawn 失败为未提交。已 spawn 的变更命令发生超时、非 JSON、超量响应或异常退出，视为结果未知；终止等待不撤销副作用。查询的同类错误仅表示查询失败。没有自动重试；用户刷新状态或查看日志后再决策。
 

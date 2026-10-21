@@ -7,6 +7,10 @@ const record = { project, args };
 if (args.includes('--file')) record.source = fs.readFileSync(args[args.indexOf('--file') + 1], 'utf8');
 if (process.env.MCPY_FIXTURE_LOG) fs.appendFileSync(process.env.MCPY_FIXTURE_LOG, JSON.stringify(record) + '\n');
 if (args.includes('--follow')) {
+  const barrier = process.env.MCPY_FIXTURE_START_BARRIER;
+  if (barrier && fs.existsSync(barrier) && fs.readFileSync(barrier, 'utf8') === 'log-fail') {
+    process.stderr.write('fixture 日志失联'); process.exitCode = 1; return;
+  }
   const session = args.includes('--group') ? 'host-session' : args[args.indexOf('--session') + 1];
   for (const source of ['engine', 'game', 'worker']) process.stdout.write(JSON.stringify({ schema_version: 1, event: 'log', session, source,
     text: source === 'game' ? '[Probe] live game 中文\nRN Call: transport\n[Run] script begin\nprint hidden\n[Run] script end\n__MCPY_RESULT_x__abc\n'
@@ -33,7 +37,10 @@ else if (verb === 'runtime' && args.includes('capabilities')) result = {
   ok: true, python: { sides: ['client', 'server'], reload_sides: ['client', 'server'] },
   reload: { python: { state: 'available' } }, coordinated_reload: true
 };
-else if (verb === 'runtime') result = { ok: true, state: 'completed', stdout: 'fixture stdout', value: 2 };
+else if (verb === 'runtime') result = { ok: true, state: 'completed',
+  stdout: record.source?.includes('MCPY_NO_RESULT') ? 'hello2\n' : 'fixture stdout',
+  value: record.source?.includes('MCPY_NO_RESULT') ? null : 2,
+  ...(args.includes('py') ? { session: args[args.indexOf('--session') + 1], side: args[args.indexOf('--side') + 1], request_id: 'fixture-game-request' } : {}) };
 else if (verb === 'logs') result = { ok: true, text: 'fixture game log\n', logs: [{ role: 'host', session: 'host-session', text: 'host log' }] };
 else if (verb === 'doctor') result = { ok: true, state: 'ready', hint: 'contract fixture only' };
 const barrier = process.env.MCPY_FIXTURE_START_BARRIER;
@@ -53,5 +60,10 @@ if (verb === 'run' && !args.includes('--list')) {
     const timer = setInterval(() => { if (fs.existsSync(barrier)) { clearInterval(timer); writeResult(); } }, 20);
     return;
   }
+}
+const pythonBarrier = process.env.MCPY_FIXTURE_PY_BARRIER;
+if (verb === 'runtime' && args.includes('py') && pythonBarrier && !fs.existsSync(pythonBarrier)) {
+  const timer = setInterval(() => { if (fs.existsSync(pythonBarrier)) { clearInterval(timer); writeResult(); } }, 20);
+  return;
 }
 writeResult();

@@ -27,6 +27,7 @@ export interface Capabilities {
 }
 export interface OperationResult {
   readonly ok: boolean; readonly state?: string; readonly session?: string; readonly group?: string;
+  readonly side?: Side;
   readonly requestId?: string; readonly stdout?: string; readonly stderr?: string;
   readonly error?: string; readonly hint?: string; readonly value?: unknown;
   readonly details: Readonly<Record<string, unknown>>;
