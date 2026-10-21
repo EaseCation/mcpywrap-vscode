@@ -34,4 +34,4 @@ VS Code 默认下载 stable 版本。指定 `VSCODE_TEST_VERSION=1.95.3` 可验�
 
 ## 提交与发布
 
-Pull Request 的 CI 会完成三平台检查、VSIX 构建和 macOS 宿主测试。通过后可从 Actions artifact 获取 VSIX；目前未配置 Marketplace 自动发布。GitHub 仓库代码使用 MIT 协议，新增打包依赖时同步维护第三方许可。
+Pull Request 的 CI 会完成三平台检查、VSIX 构建和 macOS 宿主测试。通过后可从 Actions artifact 获取 VSIX；Marketplace 自动发布通过单独的发行流程接入；账号配置、版本标签和只校验模式见 [RELEASING.md](RELEASING.md)。GitHub 仓库代码使用 MIT 协议，新增打包依赖时同步维护第三方许可。
